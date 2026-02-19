@@ -1,4 +1,4 @@
-# ForgeOS
+# Forge.OS
 
 ForgeOS is a Kaspa-focused, wallet-native AI trading dashboard prototype.
 
