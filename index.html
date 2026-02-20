@@ -11,7 +11,72 @@
         LAUNCHING FORGEOS...
       </div>
     </div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module">
+      const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+      function pickEntry(manifest) {
+        if (!manifest || typeof manifest !== "object") return "";
+        const values = Object.values(manifest);
+        return (
+          manifest["src/main.tsx"]?.file ||
+          values.find((entry) => entry?.name === "main" && entry?.isDynamicEntry)?.file ||
+          values.find((entry) => entry?.isDynamicEntry)?.file ||
+          values.find((entry) => entry?.isEntry)?.file ||
+          manifest["index.html"]?.file ||
+          ""
+        );
+      }
+
+      async function fetchManifest() {
+        const candidates = [
+          { url: "/dist/manifest.json", base: "/dist/" },
+          { url: "./dist/manifest.json", base: "./dist/" },
+          { url: "/manifest.json", base: "/" },
+          { url: "./manifest.json", base: "./" },
+          { url: "/Forge.OS/dist/manifest.json", base: "/Forge.OS/dist/" },
+          { url: "/Forge.OS/manifest.json", base: "/Forge.OS/" },
+        ];
+
+        const seen = new Set();
+        for (const candidate of candidates) {
+          if (seen.has(candidate.url)) continue;
+          seen.add(candidate.url);
+          try {
+            const response = await fetch(candidate.url, { cache: "no-store" });
+            if (!response.ok) continue;
+            const manifest = await response.json();
+            const entry = pickEntry(manifest);
+            if (!entry) continue;
+            return { entry, base: candidate.base };
+          } catch {
+            // Try next candidate.
+          }
+        }
+
+        throw new Error("Manifest not found in supported GitHub Pages paths");
+      }
+
+      async function boot() {
+        if (isLocal) {
+          await import("/src/main.tsx");
+          return;
+        }
+
+        const { entry, base } = await fetchManifest();
+        const normalizedBase = base.endsWith("/") ? base : `${base}/`;
+        const normalizedEntry = String(entry).replace(/^\.\//, "");
+        await import(`${normalizedBase}${normalizedEntry}`);
+      }
+
+      boot().catch((error) => {
+        console.error("ForgeOS bootstrap failed", error);
+        const root = document.getElementById("root");
+        if (root) {
+          const detail = String(error?.message || error || "Unknown error").replace(/[<>]/g, "");
+          root.innerHTML = `<div style='min-height:100vh;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;background:#05070a;color:#eaf1f8;font:500 14px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;padding:24px;text-align:center'><div>ForgeOS failed to load. Hard refresh (Cmd/Ctrl+Shift+R). If it continues, wait ~2 minutes for Pages cache propagation.</div><div style='opacity:.72;font-size:12px'>${detail}</div></div>`;
+        }
+      });
+    </script>
     <noscript>
       <div style="padding:24px;background:#05070a;color:#eaf1f8;font:500 14px/1.4 'IBM Plex Mono',monospace;">
         ForgeOS requires JavaScript enabled.
