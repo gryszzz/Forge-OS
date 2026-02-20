@@ -7,6 +7,88 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module">
+      const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+      const pathname = window.location.pathname || "/";
+      const currentBase = pathname.endsWith("/") ? pathname : pathname.slice(0, pathname.lastIndexOf("/") + 1);
+
+      function normalizePath(url) {
+        try {
+          return new URL(url, window.location.origin).pathname;
+        } catch {
+          return String(url || "");
+        }
+      }
+
+      function pickEntry(manifest, currentScriptPath) {
+        const values = Object.values(manifest || {}).filter(Boolean);
+
+        const preferred =
+          manifest?.["src/main.tsx"]?.file ||
+          values.find((v) => v?.name === "main" && v?.isDynamicEntry)?.file ||
+          values.find((v) => v?.isDynamicEntry)?.file ||
+          manifest?.["index.html"]?.file ||
+          values.find((v) => v?.isEntry || v?.isDynamicEntry)?.file;
+
+        if (!preferred) return "";
+
+        const normalizedPreferred = normalizePath(preferred);
+        if (normalizedPreferred === currentScriptPath) {
+          const alternate = values.find((v) => {
+            const file = v?.file;
+            if (!file) return false;
+            return normalizePath(file) !== currentScriptPath && (v?.isDynamicEntry || v?.name === "main");
+          })?.file;
+          return alternate || "";
+        }
+
+        return preferred;
+      }
+
+      async function fetchManifest() {
+        const candidates = [
+          { url: `${currentBase}manifest.json`, base: currentBase },
+          { url: `${currentBase}dist/manifest.json`, base: `${currentBase}dist/` },
+          { url: "/manifest.json", base: "/" },
+          { url: "/dist/manifest.json", base: "/dist/" },
+          { url: "/Forge.OS/manifest.json", base: "/Forge.OS/" },
+          { url: "/Forge.OS/dist/manifest.json", base: "/Forge.OS/dist/" },
+        ];
+
+        const seen = new Set();
+        for (const candidate of candidates) {
+          if (seen.has(candidate.url)) continue;
+          seen.add(candidate.url);
+          const response = await fetch(candidate.url, { cache: "no-store" });
+          if (!response.ok) continue;
+          const manifest = await response.json();
+          if (!manifest || typeof manifest !== "object") continue;
+          return { manifest, base: candidate.base };
+        }
+
+        throw new Error("Manifest fetch failed in root, dist, and repo-subpath deployment paths");
+      }
+
+      async function boot() {
+        if (isLocal) {
+          await import("/src/main.tsx");
+          return;
+        }
+
+        const currentScriptPath = normalizePath(document.currentScript?.src || "");
+        const { manifest, base } = await fetchManifest();
+        const entry = pickEntry(manifest, currentScriptPath);
+        if (!entry) throw new Error("Could not resolve app entry from manifest");
+
+        const normalizedBase = base.endsWith("/") ? base : `${base}/`;
+        const normalizedEntry = String(entry).replace(/^\.\//, "");
+        await import(`${normalizedBase}${normalizedEntry}`);
+      }
+
+      boot().catch((error) => {
+        console.error("ForgeOS bootstrap failed", error);
+        document.body.innerHTML = "<div style='padding:24px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#eee;background:#0a0a0a;min-height:100vh'>ForgeOS failed to load. Check GitHub Pages source and build artifact paths.</div>";
+      });
+    </script>
   </body>
 </html>

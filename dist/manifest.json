@@ -1,24 +1,69 @@
 {
-  "_charts-vendor-BGq5t5mK.js": {
-    "file": "assets/charts-vendor-BGq5t5mK.js",
+  "_charts-vendor-BhZkIRjM.js": {
+    "file": "assets/charts-vendor-BhZkIRjM.js",
     "name": "charts-vendor"
   },
+  "_main-!~{003}~.js": {
+    "file": "assets/main-BeHf4GZm.css",
+    "src": "_main-!~{003}~.js"
+  },
+  "_main-C96HkKVJ.js": {
+    "file": "assets/main-C96HkKVJ.js",
+    "name": "main",
+    "isDynamicEntry": true,
+    "imports": [
+      "_charts-vendor-BhZkIRjM.js",
+      "index.html"
+    ],
+    "dynamicImports": [
+      "src/components/dashboard/PerfChart.tsx",
+      "src/components/dashboard/IntelligencePanel.tsx",
+      "src/components/dashboard/TreasuryPanel.tsx"
+    ],
+    "css": [
+      "assets/main-BeHf4GZm.css"
+    ]
+  },
   "index.html": {
-    "file": "assets/index-Bc2jfzUn.js",
+    "file": "assets/index-D3KqOqV7.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "dynamicImports": [
-      "src/main.tsx"
+      "_main-C96HkKVJ.js"
     ]
   },
-  "src/main.tsx": {
-    "file": "assets/main-BtBYRDti.js",
-    "name": "main",
-    "src": "src/main.tsx",
+  "src/components/dashboard/IntelligencePanel.tsx": {
+    "file": "assets/IntelligencePanel-CuJ7EbTh.js",
+    "name": "IntelligencePanel",
+    "src": "src/components/dashboard/IntelligencePanel.tsx",
     "isDynamicEntry": true,
     "imports": [
-      "_charts-vendor-BGq5t5mK.js"
+      "_main-C96HkKVJ.js",
+      "_charts-vendor-BhZkIRjM.js",
+      "index.html"
+    ]
+  },
+  "src/components/dashboard/PerfChart.tsx": {
+    "file": "assets/PerfChart-SqsBPUrT.js",
+    "name": "PerfChart",
+    "src": "src/components/dashboard/PerfChart.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_main-C96HkKVJ.js",
+      "_charts-vendor-BhZkIRjM.js",
+      "index.html"
+    ]
+  },
+  "src/components/dashboard/TreasuryPanel.tsx": {
+    "file": "assets/TreasuryPanel-DEDvY-G_.js",
+    "name": "TreasuryPanel",
+    "src": "src/components/dashboard/TreasuryPanel.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_main-C96HkKVJ.js",
+      "_charts-vendor-BhZkIRjM.js",
+      "index.html"
     ]
   }
 }
