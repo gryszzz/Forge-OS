@@ -8,6 +8,7 @@
     "typecheck": "tsc -b --pretty false",
     "build": "npm run typecheck && vite build",
     "build:offline": "npm run build",
+    "pages:fallback": "node scripts/sync-pages-fallback.mjs",
     "verify:domain": "node scripts/verify-domain-config.mjs",
     "smoke": "node scripts/smoke.mjs",
     "domain:check": "node scripts/domain-health.mjs",

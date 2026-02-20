@@ -1,0 +1,53 @@
+{
+  "_charts-vendor-BhZkIRjM.js": {
+    "file": "assets/charts-vendor-BhZkIRjM.js",
+    "name": "charts-vendor"
+  },
+  "index.html": {
+    "file": "assets/index-BqSpz0e-.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "imports": [
+      "_charts-vendor-BhZkIRjM.js"
+    ],
+    "dynamicImports": [
+      "src/components/dashboard/PerfChart.tsx",
+      "src/components/dashboard/IntelligencePanel.tsx",
+      "src/components/dashboard/TreasuryPanel.tsx"
+    ],
+    "css": [
+      "assets/index-9TRxJUe-.css"
+    ]
+  },
+  "src/components/dashboard/IntelligencePanel.tsx": {
+    "file": "assets/IntelligencePanel-BYnlHjPS.js",
+    "name": "IntelligencePanel",
+    "src": "src/components/dashboard/IntelligencePanel.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html",
+      "_charts-vendor-BhZkIRjM.js"
+    ]
+  },
+  "src/components/dashboard/PerfChart.tsx": {
+    "file": "assets/PerfChart-BtjhKs8B.js",
+    "name": "PerfChart",
+    "src": "src/components/dashboard/PerfChart.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html",
+      "_charts-vendor-BhZkIRjM.js"
+    ]
+  },
+  "src/components/dashboard/TreasuryPanel.tsx": {
+    "file": "assets/TreasuryPanel-DhmES3ui.js",
+    "name": "TreasuryPanel",
+    "src": "src/components/dashboard/TreasuryPanel.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html",
+      "_charts-vendor-BhZkIRjM.js"
+    ]
+  }
+}
