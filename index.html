@@ -7,54 +7,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module">
-      const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-      const pathname = window.location.pathname || "/";
-      const currentBase = pathname.endsWith("/") ? pathname : pathname.slice(0, pathname.lastIndexOf("/") + 1);
-
-      async function fetchManifest() {
-        const candidates = [
-          { url: `${currentBase}manifest.json`, base: currentBase },
-          { url: `${currentBase}dist/manifest.json`, base: `${currentBase}dist/` },
-          { url: "/manifest.json", base: "/" },
-          { url: "/dist/manifest.json", base: "/dist/" },
-          { url: "/Forge.OS/manifest.json", base: "/Forge.OS/" },
-          { url: "/Forge.OS/dist/manifest.json", base: "/Forge.OS/dist/" },
-        ];
-
-        const seen = new Set();
-        for(const c of candidates) {
-          if (seen.has(c.url)) continue;
-          seen.add(c.url);
-          const res = await fetch(c.url, { cache: "no-store" });
-          if(res.ok) return { manifest: await res.json(), base: c.base };
-        }
-
-        throw new Error("Manifest fetch failed in root, dist, and repo-subpath deployment paths");
-      }
-
-      async function boot() {
-        if(isLocal) {
-          await import("/src/main.tsx");
-          return;
-        }
-
-        const { manifest, base } = await fetchManifest();
-        const entry =
-          manifest?.["src/main.tsx"]?.file ||
-          manifest?.["index.html"]?.file ||
-          Object.values(manifest || {}).find((v) => v && (v.isEntry || v.isDynamicEntry))?.file;
-
-        if(!entry) throw new Error("Could not resolve app entry from manifest");
-
-        const normalizedBase = base.endsWith("/") ? base : `${base}/`;
-        await import(`${normalizedBase}${String(entry).replace(/^\.\//, "")}`);
-      }
-
-      boot().catch((err) => {
-        console.error("ForgeOS bootstrap failed", err);
-        document.body.innerHTML = "<div style='padding:24px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#eee;background:#0a0a0a;min-height:100vh'>ForgeOS failed to load. Check GitHub Pages source and build artifact paths.</div>";
-      });
-    </script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
