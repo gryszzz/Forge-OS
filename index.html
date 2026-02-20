@@ -11,12 +11,169 @@
     <meta name="theme-color" content="#05070a" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#05070a;color:#eaf1f8;font:500 14px/1.4 'IBM Plex Mono',monospace;letter-spacing:.08em;">
+        LAUNCHING FORGEOS...
+      </div>
+    </div>
+    <script type="module">
+      const BUNDLE_RETRY_TOKEN = Date.now().toString();
+
+      function pickEntry(manifest) {
+        if (!manifest || typeof manifest !== "object") return null;
+        const byMain = Object.entries(manifest).find(([, entry]) => entry?.name === "main" && entry?.isDynamicEntry);
+        const byEntry = Object.entries(manifest).find(([, entry]) => entry?.isEntry);
+        return (
+          (manifest["src/main.tsx"] && { key: "src/main.tsx", file: manifest["src/main.tsx"].file }) ||
+          (manifest["index.html"] && { key: "index.html", file: manifest["index.html"].file }) ||
+          (byMain && { key: byMain[0], file: byMain[1]?.file }) ||
+          (byEntry && { key: byEntry[0], file: byEntry[1]?.file }) ||
+          null
+        );
+      }
+
+      function withCacheBust(url, token) {
+        if (!token) return url;
+        const separator = url.includes("?") ? "&" : "?";
+        return `${url}${separator}v=${encodeURIComponent(token)}`;
+      }
+
+      function resolveCssDeps(manifest, entryKey) {
+        if (!manifest || typeof manifest !== "object") return [];
+        const css = new Set();
+        const visited = new Set();
+
+        function walk(key) {
+          if (!key || visited.has(key)) return;
+          visited.add(key);
+          const node = manifest[key];
+          if (!node || typeof node !== "object") return;
+          if (Array.isArray(node.imports)) {
+            for (const child of node.imports) walk(child);
+          }
+          if (Array.isArray(node.css)) {
+            for (const file of node.css) css.add(file);
+          }
+        }
+
+        if (entryKey) {
+          walk(entryKey);
+        } else {
+          for (const node of Object.values(manifest)) {
+            if (node && Array.isArray(node.css)) {
+              for (const file of node.css) css.add(file);
+            }
+          }
+        }
+
+        return Array.from(css);
+      }
+
+      function ensureCssLoaded(base, files, token) {
+        const normalizedBase = base.endsWith("/") ? base : `${base}/`;
+        for (const file of files || []) {
+          const normalizedFile = String(file || "").replace(/^\.\//, "");
+          if (!normalizedFile) continue;
+          const href = withCacheBust(`${normalizedBase}${normalizedFile}`, token);
+          if (document.querySelector(`link[rel="stylesheet"][href="${href}"]`)) continue;
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = href;
+          document.head.appendChild(link);
+        }
+      }
+
+      async function fetchManifest(cacheBustToken) {
+        const candidates = [
+          { url: "/dist/manifest.json", base: "/dist/" },
+          { url: "./dist/manifest.json", base: "./dist/" },
+          { url: "/manifest.json", base: "/" },
+          { url: "./manifest.json", base: "./" },
+          { url: "/Forge.OS/dist/manifest.json", base: "/Forge.OS/dist/" },
+          { url: "/Forge.OS/manifest.json", base: "/Forge.OS/" },
+        ];
+
+        const seen = new Set();
+        for (const candidate of candidates) {
+          if (seen.has(candidate.url)) continue;
+          seen.add(candidate.url);
+
+          try {
+            const response = await fetch(withCacheBust(candidate.url, cacheBustToken), { cache: "no-store" });
+            if (!response.ok) continue;
+            const manifest = await response.json();
+            const entry = pickEntry(manifest);
+            if (!entry?.file) continue;
+            return { manifest, entry, base: candidate.base };
+          } catch {
+            // Continue candidate scan.
+          }
+        }
+
+        return null;
+      }
+
+      function isRecoverableBundleError(error) {
+        const message = String(error?.message || error || "").toLowerCase();
+        return (
+          message.includes("failed to fetch dynamically imported module") ||
+          message.includes("error loading dynamically imported module") ||
+          message.includes("importing a module script failed")
+        );
+      }
+
+      async function loadFromManifest(cacheBustToken) {
+        const resolved = await fetchManifest(cacheBustToken);
+        if (!resolved) {
+          throw new Error("manifest unavailable");
+        }
+        const { manifest, entry, base } = resolved;
+        const normalizedBase = base.endsWith("/") ? base : `${base}/`;
+        ensureCssLoaded(normalizedBase, resolveCssDeps(manifest, entry?.key), cacheBustToken);
+        const normalizedEntry = String(entry.file).replace(/^\.\//, "");
+        await import(withCacheBust(`${normalizedBase}${normalizedEntry}`, cacheBustToken));
+      }
+
+      async function boot() {
+        try {
+          await loadFromManifest("");
+          return;
+        } catch (firstError) {
+          if (isRecoverableBundleError(firstError)) {
+            await loadFromManifest(BUNDLE_RETRY_TOKEN);
+            return;
+          }
+
+          const detail = String(firstError?.message || firstError || "").toLowerCase();
+          if (detail.includes("manifest unavailable")) {
+            await import("/src/main.tsx");
+            return;
+          }
+          throw firstError;
+        }
+      }
+
+      boot().catch((error) => {
+        console.error("ForgeOS bootstrap failed", error);
+        const root = document.getElementById("root");
+        if (root) {
+          const detail = String(error?.message || error || "Unknown error").replace(/[<>]/g, "");
+          root.innerHTML = `<div style='min-height:100vh;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;background:#05070a;color:#eaf1f8;font:500 14px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;padding:24px;text-align:center'><div>ForgeOS failed to load. Hard refresh (Cmd/Ctrl+Shift+R). If it continues, retry with cache bust.</div><div style='opacity:.72;font-size:12px'>${detail}</div><button id='forgeos-retry-btn' style='border:1px solid #39ddb655;background:#0b1620;color:#39ddb6;padding:8px 14px;border-radius:8px;cursor:pointer'>Retry Now</button></div>`;
+          const retryBtn = document.getElementById("forgeos-retry-btn");
+          if (retryBtn) {
+            retryBtn.addEventListener("click", () => {
+              const next = new URL(window.location.href);
+              next.searchParams.set("_reload", Date.now().toString());
+              window.location.replace(next.toString());
+            });
+          }
+        }
+      });
+    </script>
     <noscript>
       <div style="padding:24px;background:#05070a;color:#eaf1f8;font:500 14px/1.4 'IBM Plex Mono',monospace;">
         ForgeOS requires JavaScript enabled.
       </div>
     </noscript>
-    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

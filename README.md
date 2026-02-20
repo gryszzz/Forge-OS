@@ -13,7 +13,7 @@ It provides:
 - Wallet and UTXO operations panel
 - Accumulate-only execution mode (buy/stack discipline)
 - Runtime mainnet/testnet profile switching (`?network=mainnet|testnet`)
-- Standard Vite entry boot path (eliminates fragile dynamic module bootstrap logic)
+- Dual-mode bootstrap: manifest-first in deployed environments, `/src/main.tsx` fallback for local dev
 
 ## Quick Start
 
@@ -103,7 +103,7 @@ Runtime reliability defaults:
 - Daily free-cycle quota enforced at runtime; billing tab prompts upgrade when quota is exhausted
 - Automatic cycle scheduler runs while agent status is `RUNNING`
 - Live execution requires explicit arming in UI and readiness checks (real wallet + DAG live feed)
-- Build-time hashed asset references with strict smoke validation over manifest import graph
+- Build-time hashed asset references with strict smoke validation over manifest import graph and dynamic chunk links
 
 ## Mainnet/Testnet Runtime Switch
 - Default profile comes from `VITE_KAS_NETWORK`.
