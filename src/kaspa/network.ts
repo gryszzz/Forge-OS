@@ -50,13 +50,27 @@ function normalize(raw: string) {
   return String(raw || "").trim().toLowerCase().replace(/_/g, "-");
 }
 
-export function resolveKaspaNetwork(raw: string | undefined | null): KaspaNetworkProfile {
-  const normalized = normalize(raw || "testnet-10");
+export function tryResolveKaspaNetwork(raw: string | number | undefined | null): KaspaNetworkProfile | null {
+  const normalized = normalize(String(raw ?? ""));
+  if (!normalized) return null;
+
   const match = PROFILES.find((profile) =>
     profile.aliases.some((alias) => normalize(alias) === normalized)
   );
 
-  return match || PROFILES[1];
+  if (match) return match;
+
+  // Kasware can return non-standard labels/codes depending on version.
+  if (["livenet", "live", "main", "0"].includes(normalized)) return PROFILES[0];
+  if (["test", "testnet", "test-net", "tn", "1"].includes(normalized)) return PROFILES[1];
+  if (["2", "tn11"].includes(normalized)) return PROFILES[2];
+  if (["3", "tn12"].includes(normalized)) return PROFILES[3];
+
+  return null;
+}
+
+export function resolveKaspaNetwork(raw: string | undefined | null): KaspaNetworkProfile {
+  return tryResolveKaspaNetwork(raw || "testnet-10") || PROFILES[1];
 }
 
 export function isAddressPrefixCompatible(address: string, profile: KaspaNetworkProfile): boolean {
