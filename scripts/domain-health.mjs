@@ -44,31 +44,70 @@ async function fetchSafe(url) {
   }
 }
 
-function extractModuleEntryUrl(baseUrl, html) {
-  const match = String(html || "").match(
+function extractModuleBootstrap(baseUrl, html) {
+  const source = String(html || "");
+  const moduleSrcMatch = source.match(
     /<script[^>]*type=["']module["'][^>]*src=["']([^"']+)["'][^>]*>/i
   );
-  if (!match?.[1]) return null;
-  try {
-    return new URL(match[1], baseUrl).toString();
-  } catch {
-    return null;
+  if (moduleSrcMatch?.[1]) {
+    try {
+      return {
+        mode: "module-src",
+        srcUrl: new URL(moduleSrcMatch[1], baseUrl).toString(),
+      };
+    } catch {
+      // fall through
+    }
   }
+
+  const inlineModuleMatch = source.match(/<script[^>]*type=["']module["'][^>]*>([\s\S]*?)<\/script>/i);
+  if (inlineModuleMatch?.[1]) {
+    return {
+      mode: "inline-module",
+      code: inlineModuleMatch[1],
+    };
+  }
+
+  return { mode: "none" };
+}
+
+async function loadManifest(baseOrigin) {
+  const candidates = [
+    `${baseOrigin}/manifest.json`,
+    `${baseOrigin}/dist/manifest.json`,
+    `${baseOrigin}/Forge.OS/manifest.json`,
+    `${baseOrigin}/Forge.OS/dist/manifest.json`,
+  ];
+
+  for (const manifestUrl of candidates) {
+    const manifestResponse = await fetchSafe(manifestUrl);
+    if (!manifestResponse.ok || manifestResponse.status !== 200) {
+      continue;
+    }
+
+    try {
+      const manifest = JSON.parse(manifestResponse.body || "{}");
+      if (manifest && typeof manifest === "object" && Object.keys(manifest).length > 0) {
+        return { ok: true, manifest, manifestUrl };
+      }
+    } catch {
+      return { ok: false, reason: `manifest parse failed (${manifestUrl})` };
+    }
+  }
+
+  return { ok: false, reason: "manifest unavailable (all known paths failed)" };
 }
 
 async function checkManifestAssets(baseOrigin) {
-  const manifestUrl = `${baseOrigin}/manifest.json`;
-  const manifestResponse = await fetchSafe(manifestUrl);
-  if (!manifestResponse.ok || manifestResponse.status !== 200) {
-    return { ok: false, reason: `manifest unavailable (${manifestResponse.ok ? manifestResponse.status : manifestResponse.error})` };
+  const manifestResult = await loadManifest(baseOrigin);
+  if (!manifestResult.ok) {
+    return { ok: false, reason: manifestResult.reason || "manifest unavailable" };
   }
 
-  let manifest;
-  try {
-    manifest = JSON.parse(manifestResponse.body || "{}");
-  } catch {
-    return { ok: false, reason: "manifest parse failed" };
-  }
+  const { manifest, manifestUrl } = manifestResult;
+  const manifestBaseUrl = String(manifestUrl).endsWith("/manifest.json")
+    ? String(manifestUrl).slice(0, -"manifest.json".length)
+    : `${baseOrigin}/`;
 
   const files = [...new Set(Object.values(manifest || {}).map((value) => value?.file).filter(Boolean))];
   if (files.length === 0) {
@@ -77,10 +116,25 @@ async function checkManifestAssets(baseOrigin) {
 
   const missing = [];
   for (const file of files) {
-    const assetUrl = `${baseOrigin}/${String(file).replace(/^\//, "")}`;
-    const assetResponse = await fetchSafe(assetUrl);
-    if (!assetResponse.ok || assetResponse.status !== 200) {
-      missing.push(`${assetUrl} (${assetResponse.ok ? assetResponse.status : assetResponse.error})`);
+    const normalized = String(file).replace(/^\//, "");
+    const candidateUrls = [
+      new URL(normalized, manifestBaseUrl).toString(),
+      `${baseOrigin}/${normalized}`,
+    ];
+
+    let reachable = false;
+    let failureLabel = "";
+    for (const assetUrl of candidateUrls) {
+      const assetResponse = await fetchSafe(assetUrl);
+      if (assetResponse.ok && assetResponse.status === 200) {
+        reachable = true;
+        break;
+      }
+      failureLabel = `${assetUrl} (${assetResponse.ok ? assetResponse.status : assetResponse.error})`;
+    }
+
+    if (!reachable) {
+      missing.push(failureLabel || `${normalized} (unreachable)`);
     }
   }
 
@@ -88,6 +142,7 @@ async function checkManifestAssets(baseOrigin) {
     ok: missing.length === 0,
     reason: missing.length > 0 ? `missing assets: ${missing.slice(0, 4).join(", ")}` : "",
     fileCount: files.length,
+    manifestUrl,
   };
 }
 
@@ -145,10 +200,18 @@ async function main() {
   else console.log(`https://${alt} -> error (${httpsWww.error})`);
 
   printSection("App Artifact Integrity");
-  const moduleEntryUrl = httpsRoot.ok ? extractModuleEntryUrl(`https://${domain}`, httpsRoot.body) : null;
+  const bootstrap = httpsRoot.ok ? extractModuleBootstrap(`https://${domain}`, httpsRoot.body) : { mode: "none" };
+  const moduleEntryUrl = bootstrap.mode === "module-src" ? bootstrap.srcUrl : null;
   let moduleEntryLeak = false;
-  if (!moduleEntryUrl) {
+  let inlineModuleReady = false;
+  if (bootstrap.mode === "none") {
     console.log("Module entry script tag found: NO");
+  } else if (bootstrap.mode === "inline-module") {
+    const code = String(bootstrap.code || "");
+    inlineModuleReady = code.includes("manifest") || code.includes("import(");
+    moduleEntryLeak = code.includes("127.0.0.1") || code.includes("localhost");
+    console.log(`Bootstrap mode: inline-module (${inlineModuleReady ? "recognized" : "unrecognized"})`);
+    console.log(`Localhost/module-dev leak in inline bootstrap: ${moduleEntryLeak ? "YES (ERROR)" : "NO"}`);
   } else {
     console.log(`Module entry script: ${moduleEntryUrl}`);
     const entryResponse = await fetchSafe(moduleEntryUrl);
@@ -161,7 +224,13 @@ async function main() {
   }
 
   const manifestCheck = await checkManifestAssets(`https://${domain}`);
-  console.log(`Manifest and asset graph healthy: ${manifestCheck.ok ? `YES (${manifestCheck.fileCount} files)` : `NO (${manifestCheck.reason})`}`);
+  console.log(
+    `Manifest and asset graph healthy: ${
+      manifestCheck.ok
+        ? `YES (${manifestCheck.fileCount} files via ${manifestCheck.manifestUrl})`
+        : `NO (${manifestCheck.reason})`
+    }`
+  );
 
   printSection("Readiness");
   const aReady = a.ok && hasAll(a.values, GITHUB_PAGES_A);
@@ -169,7 +238,9 @@ async function main() {
   const cnameReady =
     altCname.ok && altCname.values.some((v) => normalizeHost(v) === "gryszzz.github.io");
   const httpsReady = httpsRoot.ok && httpsRoot.status >= 200 && httpsRoot.status < 500;
-  const moduleEntryReady = Boolean(moduleEntryUrl);
+  const moduleEntryReady =
+    (bootstrap.mode === "module-src" && Boolean(moduleEntryUrl)) ||
+    (bootstrap.mode === "inline-module" && inlineModuleReady);
   const manifestReady = manifestCheck.ok;
   const localhostLeak = moduleEntryLeak;
 
@@ -215,6 +286,18 @@ async function main() {
 
   if (localhostLeak) {
     console.log("Status: App entry appears to reference localhost/dev modules. Rebuild and redeploy production artifacts.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const likelyBranchModeMismatch =
+    httpsRoot.ok &&
+    String(httpsRoot.body || "").includes("/dist/manifest.json") &&
+    !manifestReady;
+  if (likelyBranchModeMismatch) {
+    console.log("Status: GitHub Pages appears to be serving branch mode content with missing dist assets.");
+    console.log("Action: In Settings -> Pages, set Source to GitHub Actions (disable branch-source Pages builds).");
+    console.log("Then rerun the 'Deploy ForgeOS to GitHub Pages' workflow.");
     process.exitCode = 1;
     return;
   }

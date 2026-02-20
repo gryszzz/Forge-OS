@@ -141,7 +141,10 @@ Runtime reliability defaults:
 4. Optional `www` support:
 - `CNAME` `www` -> `gryszzz.github.io`
 5. Keep repo variable `GH_PAGES_CNAME` either empty or exactly `forge-os.xyz` (workflow now prefers `public/CNAME` and warns on mismatch).
-6. In GitHub repo Settings -> Pages, set Custom domain to `forge-os.xyz` and enable `Enforce HTTPS`.
+6. In GitHub repo Settings -> Pages:
+- Source: `GitHub Actions`
+- Custom domain: `forge-os.xyz`
+- Enable `Enforce HTTPS`
 7. Re-run `Deploy ForgeOS to GitHub Pages` workflow.
 8. Verify:
 - `https://gryszzz.github.io/Forge.OS/`

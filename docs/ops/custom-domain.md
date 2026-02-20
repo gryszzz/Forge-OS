@@ -31,8 +31,9 @@ If Name.com rejects AAAA input, continue with A records and CNAME; IPv4 launch i
 
 ## GitHub Settings
 In repository `Settings -> Pages`:
-1. Custom domain: `forge-os.xyz`
-2. Enable `Enforce HTTPS` once certificate is issued.
+1. Source: **GitHub Actions** (required; do not use branch source)
+2. Custom domain: `forge-os.xyz`
+3. Enable `Enforce HTTPS` once certificate is issued.
 
 `public/CNAME` is committed and workflow copies it into `dist/CNAME` automatically.
 
@@ -78,7 +79,13 @@ If GitHub Pages shows `InvalidDNSError`:
 - Re-save `forge-os.xyz` in GitHub `Settings -> Pages -> Custom domain`.
 - Wait for cert issuance, then enable `Enforce HTTPS`.
 
-6. If still unresolved after several hours, contact registrar support and ask:
+6. If app HTML loads but module chunks 404 (or you see `Importing module script failed`):
+- Check Actions tab for a workflow named `pages build and deployment`.
+- If that workflow is present, Pages is still in branch mode.
+- Fix: `Settings -> Pages -> Source -> GitHub Actions`.
+- Rerun `Deploy ForgeOS to GitHub Pages`.
+
+7. If still unresolved after several hours, contact registrar support and ask:
 - “Please confirm delegation for `forge-os.xyz` is published in `.xyz` registry.”
 
 ## Notes
