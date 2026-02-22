@@ -4,7 +4,7 @@
     "name": "charts-vendor"
   },
   "index.html": {
-    "file": "assets/index-DtfYpeQk.js",
+    "file": "assets/index-C7TVHM2p.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -21,7 +21,7 @@
     ]
   },
   "src/components/dashboard/IntelligencePanel.tsx": {
-    "file": "assets/IntelligencePanel-M1Mohq5u.js",
+    "file": "assets/IntelligencePanel-DbO61ish.js",
     "name": "IntelligencePanel",
     "src": "src/components/dashboard/IntelligencePanel.tsx",
     "isDynamicEntry": true,
@@ -31,7 +31,7 @@
     ]
   },
   "src/components/dashboard/PerfChart.tsx": {
-    "file": "assets/PerfChart-BE1lSwBm.js",
+    "file": "assets/PerfChart-BGaqcJ5E.js",
     "name": "PerfChart",
     "src": "src/components/dashboard/PerfChart.tsx",
     "isDynamicEntry": true,
@@ -41,7 +41,7 @@
     ]
   },
   "src/components/dashboard/TreasuryPanel.tsx": {
-    "file": "assets/TreasuryPanel-CxY1bMju.js",
+    "file": "assets/TreasuryPanel-Cnh1P2Eg.js",
     "name": "TreasuryPanel",
     "src": "src/components/dashboard/TreasuryPanel.tsx",
     "isDynamicEntry": true,

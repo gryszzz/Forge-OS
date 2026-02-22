@@ -8,10 +8,15 @@ function runtimeNetworkOverride() {
   const fromQuery = new URLSearchParams(window.location.search).get("network");
   if (fromQuery) return fromQuery;
   try {
-    return window.localStorage.getItem("forgeos.network") || "";
+    // Mainnet-first UX: ignore stale persisted network overrides from prior sessions.
+    // Runtime switching is still supported via `?network=...` and the topbar selector.
+    if (window.localStorage.getItem("forgeos.network")) {
+      window.localStorage.removeItem("forgeos.network");
+    }
   } catch {
-    return "";
+    // Ignore storage failures in restricted browser contexts.
   }
+  return "";
 }
 
 const RUNTIME_NETWORK_OVERRIDE = runtimeNetworkOverride();

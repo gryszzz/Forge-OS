@@ -6,7 +6,9 @@ import {
   NETWORK_LABEL,
 } from "../constants";
 import { fmt, normalizeKaspaAddress } from "../helpers";
-import { resolveKaspaNetwork } from "../kaspa/network";
+import { isAddressPrefixCompatible, resolveKaspaNetwork } from "../kaspa/network";
+
+const ALL_KASPA_ADDRESS_PREFIXES = ["kaspa", "kaspatest", "kaspadev", "kaspasim"];
 
 function toSompi(amountKas: number) {
   return Math.floor(Number(amountKas || 0) * 1e8);
@@ -54,15 +56,29 @@ export const WalletAdapter = {
     }
     const accounts = await w.requestAccounts();
     if(!accounts?.length) throw new Error("No accounts returned from Kasware");
-    const address = normalizeKaspaAddress(accounts[0], ALLOWED_ADDRESS_PREFIXES);
     const rawNetwork = typeof w.getNetwork === "function" ? await w.getNetwork() : DEFAULT_NETWORK;
     const walletNetwork = resolveKaspaNetwork(rawNetwork);
     const expectedNetwork = resolveKaspaNetwork(DEFAULT_NETWORK);
+    const address = normalizeKaspaAddress(accounts[0], ALL_KASPA_ADDRESS_PREFIXES);
+
+    if (!isAddressPrefixCompatible(address, walletNetwork)) {
+      throw new Error(
+        `Kasware returned an address prefix that does not match ${walletNetwork.label}. Check wallet network/account and retry.`
+      );
+    }
+
     if (ENFORCE_WALLET_NETWORK && walletNetwork.id !== expectedNetwork.id) {
       throw new Error(
         `Kasware is on ${walletNetwork.label}. Expected ${NETWORK_LABEL}. Switch network in wallet and retry.`
       );
     }
+
+    if (!isAddressPrefixCompatible(address, expectedNetwork)) {
+      throw new Error(
+        `Kasware returned a ${walletNetwork.label} address, but ForgeOS is using ${NETWORK_LABEL}. Switch the app profile or wallet network and retry.`
+      );
+    }
+
     return { address, network: walletNetwork.id, provider: "kasware" };
   },
 
