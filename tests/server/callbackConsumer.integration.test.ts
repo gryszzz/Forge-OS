@@ -183,6 +183,14 @@ describe("callback consumer reference service", () => {
     expect(consistency2.res.status).toBe(200);
     expect(consistency2.body.ok).toBe(true);
 
+    const summary = await httpJson(`http://127.0.0.1:${port}/v1/telemetry-summary`);
+    expect(summary.res.status).toBe(200);
+    expect(summary.body.ok).toBe(true);
+    expect(summary.body.receipts.confirmedCount).toBeGreaterThanOrEqual(1);
+    expect(summary.body.receipts.confirmationLatencyMs).toBeTruthy();
+    expect(summary.body.truth.consistencyChecksTotal).toBe(2);
+    expect(summary.body.truth.consistencyMismatchTotal).toBe(1);
+
     const metricsRes = await fetch(`http://127.0.0.1:${port}/metrics`);
     const metricsText = await metricsRes.text();
     expect(metricsText).toContain("forgeos_callback_consumer_cycle_accepted_total 2");

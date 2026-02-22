@@ -517,6 +517,71 @@ function upsertReceipt(entry) {
   if (oldestKey) recentReceipts.delete(oldestKey);
 }
 
+function percentileFromSorted(values, pct) {
+  if (!Array.isArray(values) || values.length === 0) return null;
+  const p = Math.max(0, Math.min(100, Number(pct || 0)));
+  const idx = Math.min(values.length - 1, Math.max(0, Math.ceil((p / 100) * values.length) - 1));
+  const v = Number(values[idx]);
+  return Number.isFinite(v) ? v : null;
+}
+
+function buildTelemetrySummary() {
+  const now = nowMs();
+  const confirmLatencies = [];
+  const receiptLags = [];
+  let confirmedReceipts = 0;
+  let backendConfirmed = 0;
+  let chainConfirmed = 0;
+
+  for (const receipt of recentReceipts.values()) {
+    const status = String(receipt?.status || "").toLowerCase();
+    const confirmations = Math.max(0, Number(receipt?.confirmations || 0));
+    if (status !== "confirmed" && confirmations <= 0) continue;
+    confirmedReceipts += 1;
+
+    const confirmTs = Number(receipt?.confirmTs || 0);
+    const broadcastTs = Number(receipt?.broadcastTs || 0);
+    if (confirmTs > 0 && broadcastTs > 0 && confirmTs >= broadcastTs) {
+      confirmLatencies.push(confirmTs - broadcastTs);
+    }
+    if (confirmTs > 0 && now >= confirmTs) {
+      receiptLags.push(now - confirmTs);
+    }
+    const source = String(receipt?.confirmTsSource || "").toLowerCase();
+    if (source === "chain") chainConfirmed += 1;
+    else if (source) backendConfirmed += 1;
+  }
+
+  confirmLatencies.sort((a, b) => a - b);
+  receiptLags.sort((a, b) => a - b);
+
+  return {
+    ok: true,
+    service: "forgeos-callback-consumer",
+    receipts: {
+      recentCount: recentReceipts.size,
+      confirmedCount: confirmedReceipts,
+      chainConfirmedCount: chainConfirmed,
+      backendConfirmedCount: backendConfirmed,
+      confirmationLatencyMs: {
+        p50: percentileFromSorted(confirmLatencies, 50),
+        p95: percentileFromSorted(confirmLatencies, 95),
+        samples: confirmLatencies.length,
+      },
+      receiptLagMs: {
+        p50: percentileFromSorted(receiptLags, 50),
+        p95: percentileFromSorted(receiptLags, 95),
+        samples: receiptLags.length,
+      },
+    },
+    truth: {
+      consistencyChecksTotal: metrics.receiptConsistencyChecksTotal,
+      consistencyMismatchTotal: metrics.receiptConsistencyMismatchTotal,
+    },
+    ts: now,
+  };
+}
+
 async function persistReceiptToRedis(receipt) {
   if (!redisClient) return;
   await redisOp("receipt_set", (r) =>
@@ -733,6 +798,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     json(res, 200, { receipts: Array.from(recentReceipts.values()), ts: nowMs() }, origin);
+    recordHttp(routeKey, 200);
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/v1/telemetry-summary") {
+    json(res, 200, buildTelemetrySummary(), origin);
     recordHttp(routeKey, 200);
     return;
   }

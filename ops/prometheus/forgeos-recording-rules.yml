@@ -1,0 +1,39 @@
+groups:
+  - name: forgeos-truth-and-control-recording
+    interval: 30s
+    rules:
+      - record: forgeos:callback_consumer:receipt_consistency_checks_rate5m
+        expr: rate(forgeos_callback_consumer_receipt_consistency_checks_total[5m])
+      - record: forgeos:callback_consumer:receipt_consistency_mismatch_rate5m
+        expr: rate(forgeos_callback_consumer_receipt_consistency_mismatch_total[5m])
+      - record: forgeos:callback_consumer:receipt_consistency_mismatch_ratio5m
+        expr: |
+          forgeos:callback_consumer:receipt_consistency_mismatch_rate5m
+          /
+          clamp_min(forgeos:callback_consumer:receipt_consistency_checks_rate5m, 0.000001)
+      - record: forgeos:scheduler:callback_error_ratio5m
+        expr: |
+          rate(forgeos_scheduler_callback_error_total[5m])
+          /
+          clamp_min(rate(forgeos_scheduler_callback_error_total[5m]) + rate(forgeos_scheduler_callback_success_total[5m]), 0.000001)
+      - record: forgeos:scheduler:saturation_events_rate5m
+        expr: rate(forgeos_scheduler_saturation_events_total[5m])
+      - record: forgeos:tx_builder:fallback_all_inputs_rate5m
+        expr: rate(forgeos_tx_builder_local_wasm_policy_fallback_all_inputs_total[5m])
+      - record: forgeos:tx_builder:fallback_all_inputs_ratio5m
+        expr: |
+          rate(forgeos_tx_builder_local_wasm_policy_fallback_all_inputs_total[5m])
+          /
+          clamp_min(rate(forgeos_tx_builder_local_wasm_requests_total[5m]), 0.000001)
+      - record: forgeos:tx_builder:avg_selected_inputs5m
+        expr: |
+          rate(forgeos_tx_builder_local_wasm_policy_selected_inputs_total[5m])
+          /
+          clamp_min(rate(forgeos_tx_builder_local_wasm_requests_total[5m]), 0.000001)
+      - record: forgeos:tx_builder:avg_priority_fee_sompi5m
+        expr: |
+          rate(forgeos_tx_builder_local_wasm_policy_priority_fee_sompi_total[5m])
+          /
+          clamp_min(rate(forgeos_tx_builder_local_wasm_requests_total[5m]), 0.000001)
+      - record: forgeos:tx_builder:fallback_all_inputs_spike
+        expr: forgeos:tx_builder:fallback_all_inputs_ratio5m > 0.05

@@ -1,0 +1,53 @@
+groups:
+  - name: forgeos-operator-alerts
+    interval: 30s
+    rules:
+      - alert: ForgeOSReceiptConsistencyMismatchRateHigh
+        expr: forgeos:callback_consumer:receipt_consistency_mismatch_ratio5m > 0.1 and forgeos:callback_consumer:receipt_consistency_checks_rate5m > 0.02
+        for: 5m
+        labels:
+          severity: warning
+          service: callback-consumer
+        annotations:
+          summary: "Receipt consistency mismatch ratio high"
+          description: "Backend vs chain receipt mismatch ratio exceeded 10% for 5m. Investigate truth pipeline and degrade automation."
+
+      - alert: ForgeOSSchedulerCallbackErrorsHigh
+        expr: forgeos:scheduler:callback_error_ratio5m > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: scheduler
+        annotations:
+          summary: "Scheduler callback error ratio elevated"
+          description: "Callback POST failures exceed 5% over 5m. Check callback-consumer availability/auth/network."
+
+      - alert: ForgeOSSchedulerSaturationEvents
+        expr: forgeos:scheduler:saturation_events_rate5m > 0
+        for: 3m
+        labels:
+          severity: warning
+          service: scheduler
+        annotations:
+          summary: "Scheduler saturation events detected"
+          description: "Scheduler queue/inflight saturation crossed threshold. Inspect queue depth, concurrency, and callback latency."
+
+      - alert: ForgeOSTxBuilderFallbackAllInputsSpike
+        expr: forgeos:tx_builder:fallback_all_inputs_ratio5m > 0.05 and rate(forgeos_tx_builder_local_wasm_requests_total[5m]) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          service: tx-builder
+        annotations:
+          summary: "Tx-builder fallback-to-all-inputs rate is elevated"
+          description: "Local WASM policy is frequently falling back to all inputs. Review coin selection, fee policy, and UTXO fragmentation."
+
+      - alert: ForgeOSDuplicateOrStaleFenceCallbacks
+        expr: rate(forgeos_callback_consumer_cycle_duplicate_total[5m]) > 0 or rate(forgeos_callback_consumer_cycle_stale_fence_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: scheduler-callback-consumer
+        annotations:
+          summary: "Duplicate or stale-fence callbacks observed"
+          description: "Leader/fencing or callback idempotency issues detected. Investigate scheduler failover and callback consumer fencing."

@@ -31,6 +31,12 @@ const KAS_API_TIMEOUT_MS = Math.max(1000, Number(process.env.TX_BUILDER_KAS_API_
 const COMMAND_TIMEOUT_MS = Math.max(1000, Number(process.env.TX_BUILDER_COMMAND_TIMEOUT_MS || 15000));
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number(process.env.TX_BUILDER_REQUEST_TIMEOUT_MS || 15000));
 const ALLOW_MANUAL_TXJSON = /^(1|true|yes)$/i.test(String(process.env.TX_BUILDER_ALLOW_MANUAL_TXJSON || "false"));
+const TELEMETRY_SUMMARY_CALLBACK_URL = String(process.env.TX_BUILDER_CALLBACK_CONSUMER_SUMMARY_URL || "").trim();
+const TELEMETRY_SUMMARY_CALLBACK_TOKEN = String(process.env.TX_BUILDER_CALLBACK_CONSUMER_SUMMARY_TOKEN || "").trim();
+const TELEMETRY_SUMMARY_SCHEDULER_URL = String(process.env.TX_BUILDER_SCHEDULER_SUMMARY_URL || "").trim();
+const TELEMETRY_SUMMARY_SCHEDULER_TOKEN = String(process.env.TX_BUILDER_SCHEDULER_SUMMARY_TOKEN || "").trim();
+const TELEMETRY_SUMMARY_TIMEOUT_MS = Math.max(250, Number(process.env.TX_BUILDER_TELEMETRY_SUMMARY_TIMEOUT_MS || 3000));
+const TELEMETRY_SUMMARY_TTL_MS = Math.max(250, Number(process.env.TX_BUILDER_TELEMETRY_SUMMARY_TTL_MS || 5000));
 
 const metrics = {
   startedAtMs: Date.now(),
@@ -54,10 +60,22 @@ const metrics = {
   upstreamErrorsTotal: 0,
   commandRequestsTotal: 0,
   commandErrorsTotal: 0,
+  telemetrySummaryFetchTotal: 0,
+  telemetrySummaryFetchErrorsTotal: 0,
+  telemetrySummaryCacheHitsTotal: 0,
+  telemetrySummaryLastSuccessTs: 0,
+  telemetrySummaryCallbackConfirmP95Ms: 0,
+  telemetrySummaryCallbackReceiptLagP95Ms: 0,
+  telemetrySummarySchedulerSaturationProxyPct: 0,
+  telemetrySummarySchedulerCallbackP95BucketMs: 0,
 };
 
 let kaspaWasmPromise = null;
 let localTxPolicyConfig = readLocalTxPolicyConfig();
+const telemetrySummaryCache = {
+  callback: { ts: 0, value: null, inFlight: null, lastError: "" },
+  scheduler: { ts: 0, value: null, inFlight: null, lastError: "" },
+};
 
 function nowMs() {
   return Date.now();
@@ -213,6 +231,107 @@ async function fetchJsonWithTimeout(url, timeoutMs) {
   }
 }
 
+async function fetchJsonWithTimeoutAndHeaders(url, timeoutMs, headers) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json", ...(headers || {}) },
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    const textValue = await res.text();
+    if (!res.ok) {
+      throw new Error(`summary_${res.status}:${String(textValue || "").slice(0, 200)}`);
+    }
+    return textValue ? JSON.parse(textValue) : {};
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+function summaryAuthHeaders(token) {
+  const trimmed = String(token || "").trim();
+  return trimmed ? { Authorization: `Bearer ${trimmed}` } : {};
+}
+
+async function getTelemetrySummaryCached(kind) {
+  const cfg =
+    kind === "callback"
+      ? { url: TELEMETRY_SUMMARY_CALLBACK_URL, token: TELEMETRY_SUMMARY_CALLBACK_TOKEN }
+      : { url: TELEMETRY_SUMMARY_SCHEDULER_URL, token: TELEMETRY_SUMMARY_SCHEDULER_TOKEN };
+  if (!cfg.url) return null;
+  const slot = telemetrySummaryCache[kind];
+  const now = nowMs();
+  if (slot.value && now - slot.ts <= TELEMETRY_SUMMARY_TTL_MS) {
+    metrics.telemetrySummaryCacheHitsTotal += 1;
+    return slot.value;
+  }
+  if (slot.inFlight) return slot.inFlight;
+  slot.inFlight = (async () => {
+    metrics.telemetrySummaryFetchTotal += 1;
+    try {
+      const data = await fetchJsonWithTimeoutAndHeaders(cfg.url, TELEMETRY_SUMMARY_TIMEOUT_MS, summaryAuthHeaders(cfg.token));
+      slot.value = data;
+      slot.ts = nowMs();
+      slot.lastError = "";
+      metrics.telemetrySummaryLastSuccessTs = slot.ts;
+      return data;
+    } catch (e) {
+      metrics.telemetrySummaryFetchErrorsTotal += 1;
+      slot.lastError = String(e?.message || e || "telemetry_summary_fetch_failed").slice(0, 240);
+      return slot.value || null;
+    } finally {
+      slot.inFlight = null;
+    }
+  })();
+  return slot.inFlight;
+}
+
+function mergeLiveTelemetry(inputTelemetry, callbackSummary, schedulerSummary) {
+  const base = inputTelemetry && typeof inputTelemetry === "object" ? { ...inputTelemetry } : {};
+  const confirmP95Ms = Number(
+    base?.observedConfirmP95Ms ??
+      callbackSummary?.receipts?.confirmationLatencyMs?.p95 ??
+      callbackSummary?.receipts?.confirmationLatencyMs?.p95Ms ??
+      0
+  );
+  const receiptLagP95Ms = Number(callbackSummary?.receipts?.receiptLagMs?.p95 ?? 0);
+  const saturationProxyPct = Number(
+    schedulerSummary?.scheduler?.saturationProxyPct ??
+      schedulerSummary?.scheduler?.saturation_pct ??
+      0
+  );
+  const schedulerCallbackP95BucketMs = Number(schedulerSummary?.callbacks?.latencyP95BucketMs ?? 0);
+
+  if (!base.observedConfirmP95Ms && confirmP95Ms > 0) {
+    base.observedConfirmP95Ms = Math.round(confirmP95Ms);
+  }
+  if (base.daaCongestionPct == null && saturationProxyPct > 0) {
+    base.daaCongestionPct = Math.max(0, Math.min(100, Math.round(saturationProxyPct)));
+  }
+  if (receiptLagP95Ms > 0) base.receiptLagP95Ms = Math.round(receiptLagP95Ms);
+  if (schedulerCallbackP95BucketMs > 0) base.schedulerCallbackLatencyP95BucketMs = Math.round(schedulerCallbackP95BucketMs);
+
+  metrics.telemetrySummaryCallbackConfirmP95Ms = confirmP95Ms > 0 ? Math.round(confirmP95Ms) : 0;
+  metrics.telemetrySummaryCallbackReceiptLagP95Ms = receiptLagP95Ms > 0 ? Math.round(receiptLagP95Ms) : 0;
+  metrics.telemetrySummarySchedulerSaturationProxyPct = saturationProxyPct > 0 ? Math.round(saturationProxyPct) : 0;
+  metrics.telemetrySummarySchedulerCallbackP95BucketMs = schedulerCallbackP95BucketMs > 0 ? Math.round(schedulerCallbackP95BucketMs) : 0;
+
+  return base;
+}
+
+async function getAdaptiveTelemetry(inputTelemetry) {
+  const needsConfirm = !Number(inputTelemetry?.observedConfirmP95Ms || 0);
+  const needsCongestion = inputTelemetry?.daaCongestionPct == null;
+  if (!needsConfirm && !needsCongestion) return inputTelemetry || {};
+  const [callbackSummary, schedulerSummary] = await Promise.all([
+    needsConfirm ? getTelemetrySummaryCached("callback") : Promise.resolve(null),
+    needsCongestion ? getTelemetrySummaryCached("scheduler") : Promise.resolve(null),
+  ]);
+  return mergeLiveTelemetry(inputTelemetry, callbackSummary, schedulerSummary);
+}
+
 async function loadKaspaWasm() {
   if (kaspaWasmPromise) return kaspaWasmPromise;
   kaspaWasmPromise = (async () => {
@@ -269,6 +388,7 @@ function normalizeUtxoEntriesForKaspaWasm(kaspa, fromAddress, payload) {
 async function buildTxJsonLocalWasm(payload) {
   metrics.localWasmRequestsTotal += 1;
   try {
+    const effectiveTelemetry = await getAdaptiveTelemetry(payload.telemetry);
     const kaspa = await loadKaspaWasm();
     const apiBase = kasApiBaseForNetwork(payload.networkId);
     if (!apiBase) throw new Error("kas_api_base_not_configured");
@@ -298,7 +418,7 @@ async function buildTxJsonLocalWasm(payload) {
       outputsTotalSompi,
       outputCount: outputs.length,
       requestPriorityFeeSompi: payload.priorityFeeSompi,
-      telemetry: payload.telemetry,
+      telemetry: effectiveTelemetry,
       config: localTxPolicyConfig,
     });
     if (!policyPlan.selectedEntries.length) throw new Error("tx_builder_no_selected_utxos");
@@ -346,7 +466,7 @@ async function buildTxJsonLocalWasm(payload) {
       requiredTargetSompi: String(policyPlan.requiredTargetSompi || 0n),
       priorityFeeSompi: String(priorityFeeSompi),
       fallbackUsedAllInputs,
-      ...(payload?.telemetry ? { telemetry: payload.telemetry } : {}),
+      ...(effectiveTelemetry && Object.keys(effectiveTelemetry).length ? { telemetry: effectiveTelemetry } : {}),
       ...(policyPlan?.adaptiveSignals ? { adaptiveSignals: policyPlan.adaptiveSignals } : {}),
       ...(selectedBuildError ? { selectedBuildError: String(selectedBuildError?.message || selectedBuildError).slice(0, 200) } : {}),
       config: describeLocalTxPolicyConfig(localTxPolicyConfig),
@@ -516,6 +636,27 @@ function exportPrometheus() {
   push("# HELP forgeos_tx_builder_auth_failures_total Auth failures.");
   push("# TYPE forgeos_tx_builder_auth_failures_total counter");
   push(`forgeos_tx_builder_auth_failures_total ${metrics.authFailuresTotal}`);
+  push("# HELP forgeos_tx_builder_telemetry_summary_fetch_total Telemetry summary fetch attempts.");
+  push("# TYPE forgeos_tx_builder_telemetry_summary_fetch_total counter");
+  push(`forgeos_tx_builder_telemetry_summary_fetch_total ${metrics.telemetrySummaryFetchTotal}`);
+  push("# HELP forgeos_tx_builder_telemetry_summary_fetch_errors_total Telemetry summary fetch errors.");
+  push("# TYPE forgeos_tx_builder_telemetry_summary_fetch_errors_total counter");
+  push(`forgeos_tx_builder_telemetry_summary_fetch_errors_total ${metrics.telemetrySummaryFetchErrorsTotal}`);
+  push("# HELP forgeos_tx_builder_telemetry_summary_cache_hits_total Telemetry summary cache hits.");
+  push("# TYPE forgeos_tx_builder_telemetry_summary_cache_hits_total counter");
+  push(`forgeos_tx_builder_telemetry_summary_cache_hits_total ${metrics.telemetrySummaryCacheHitsTotal}`);
+  push("# HELP forgeos_tx_builder_telemetry_summary_callback_confirm_p95_ms Latest callback-consumer confirmation latency p95 from summary cache.");
+  push("# TYPE forgeos_tx_builder_telemetry_summary_callback_confirm_p95_ms gauge");
+  push(`forgeos_tx_builder_telemetry_summary_callback_confirm_p95_ms ${metrics.telemetrySummaryCallbackConfirmP95Ms}`);
+  push("# HELP forgeos_tx_builder_telemetry_summary_callback_receipt_lag_p95_ms Latest callback-consumer receipt lag p95 from summary cache.");
+  push("# TYPE forgeos_tx_builder_telemetry_summary_callback_receipt_lag_p95_ms gauge");
+  push(`forgeos_tx_builder_telemetry_summary_callback_receipt_lag_p95_ms ${metrics.telemetrySummaryCallbackReceiptLagP95Ms}`);
+  push("# HELP forgeos_tx_builder_telemetry_summary_scheduler_saturation_proxy_pct Latest scheduler saturation proxy pct from summary cache.");
+  push("# TYPE forgeos_tx_builder_telemetry_summary_scheduler_saturation_proxy_pct gauge");
+  push(`forgeos_tx_builder_telemetry_summary_scheduler_saturation_proxy_pct ${metrics.telemetrySummarySchedulerSaturationProxyPct}`);
+  push("# HELP forgeos_tx_builder_telemetry_summary_scheduler_callback_p95_bucket_ms Latest scheduler callback latency p95 bucket from summary cache.");
+  push("# TYPE forgeos_tx_builder_telemetry_summary_scheduler_callback_p95_bucket_ms gauge");
+  push(`forgeos_tx_builder_telemetry_summary_scheduler_callback_p95_bucket_ms ${metrics.telemetrySummarySchedulerCallbackP95BucketMs}`);
   push("# HELP forgeos_tx_builder_uptime_seconds Service uptime.");
   push("# TYPE forgeos_tx_builder_uptime_seconds gauge");
   push(`forgeos_tx_builder_uptime_seconds ${((nowMs() - metrics.startedAtMs) / 1000).toFixed(3)}`);
@@ -563,6 +704,16 @@ const server = http.createServer(async (req, res) => {
         hasCommand: Boolean(COMMAND),
         hasUpstream: Boolean(UPSTREAM_URL),
         allowManualTxJson: ALLOW_MANUAL_TXJSON,
+        telemetrySummary: {
+          callbackUrlConfigured: Boolean(TELEMETRY_SUMMARY_CALLBACK_URL),
+          schedulerUrlConfigured: Boolean(TELEMETRY_SUMMARY_SCHEDULER_URL),
+          ttlMs: TELEMETRY_SUMMARY_TTL_MS,
+          timeoutMs: TELEMETRY_SUMMARY_TIMEOUT_MS,
+          callbackCacheAgeMs: telemetrySummaryCache.callback.ts ? nowMs() - telemetrySummaryCache.callback.ts : null,
+          schedulerCacheAgeMs: telemetrySummaryCache.scheduler.ts ? nowMs() - telemetrySummaryCache.scheduler.ts : null,
+          callbackLastError: telemetrySummaryCache.callback.lastError || null,
+          schedulerLastError: telemetrySummaryCache.scheduler.lastError || null,
+        },
       },
       ts: nowMs(),
     }, origin);

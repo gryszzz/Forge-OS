@@ -28,6 +28,8 @@ function setWindowGhostBridge(opts?: {
   accountAddress?: string;
   networkId?: string;
   txid?: string;
+  rejectTransact?: boolean;
+  transactPayload?: any;
 }) {
   const listeners = new Map<string, Set<(event: any) => void>>();
   const add = (type: string, fn: any) => {
@@ -74,7 +76,11 @@ function setWindowGhostBridge(opts?: {
           return true;
         }
         if (req.method === "transact") {
-          emit("kaspa:event", { id: req.id, data: { txid } });
+          if (opts?.rejectTransact) {
+            emit("kaspa:event", { id: req.id, data: false });
+            return true;
+          }
+          emit("kaspa:event", { id: req.id, data: opts?.transactPayload ?? { txid } });
           return true;
         }
       }
@@ -134,6 +140,16 @@ describe('WalletAdapter', () => {
     ).rejects.toThrow(/User rejected wallet request/);
   });
 
+  it('normalizes kasware timeout errors on send', async () => {
+    setWindowKasware({
+      sendKaspa: vi.fn().mockRejectedValue(new Error('kasware_send_kaspa_timeout_45000ms')),
+    });
+    const { WalletAdapter } = await import('../../src/wallet/WalletAdapter');
+    await expect(
+      WalletAdapter.sendKasware('kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85', 1)
+    ).rejects.toThrow(/timed out/i);
+  });
+
   it('connects kastle when connect/getAccount/request succeed', async () => {
     setWindowKastle({
       connect: vi.fn().mockResolvedValue(true),
@@ -185,6 +201,16 @@ describe('WalletAdapter', () => {
     expect(signAndBroadcastTx).toHaveBeenCalledWith('mainnet', '{"mock":"txjson"}');
   });
 
+  it('fails kastle send when provider payload does not contain a txid', async () => {
+    setWindowKastle({
+      sendKaspa: vi.fn().mockResolvedValue({ ok: true }),
+    });
+    const { WalletAdapter } = await import('../../src/wallet/WalletAdapter');
+    await expect(
+      WalletAdapter.sendKastle('kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85', 0.25)
+    ).rejects.toThrow(/did not return a transaction id/i);
+  });
+
   it('reuses cached kastle account address for tx-builder backend after connect', async () => {
     vi.stubEnv('VITE_KASTLE_RAW_TX_ENABLED', 'true');
     vi.stubEnv('VITE_KASTLE_RAW_TX_MANUAL_JSON_PROMPT_ENABLED', 'false');
@@ -228,6 +254,25 @@ describe('WalletAdapter', () => {
     expect(txid).toBe('e'.repeat(64));
   });
 
+  it('normalizes ghost wallet rejection on transact', async () => {
+    setWindowGhostBridge({ rejectTransact: true });
+    const { WalletAdapter } = await import('../../src/wallet/WalletAdapter');
+    await WalletAdapter.connectGhost();
+    await expect(
+      WalletAdapter.sendGhost('kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85', 0.5)
+    ).rejects.toThrow(/User rejected wallet request/i);
+  });
+
+  it('prompts for ghost txid when payload is non-standard and accepts manual txid', async () => {
+    setWindowGhostBridge({ transactPayload: { result: { raw: 'serialized-tx-payload' } } });
+    (globalThis as any).window.prompt = vi.fn().mockReturnValue('c'.repeat(64));
+    const { WalletAdapter } = await import('../../src/wallet/WalletAdapter');
+    await WalletAdapter.connectGhost();
+    const txid = await WalletAdapter.sendGhost('kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85', 0.75);
+    expect(txid).toBe('c'.repeat(64));
+    expect((globalThis as any).window.prompt).toHaveBeenCalled();
+  });
+
   it('opens kaspium deep-link and accepts manual txid', async () => {
     const prompt = vi.fn().mockReturnValue('a'.repeat(64));
     (globalThis as any).window = {
@@ -251,6 +296,23 @@ describe('WalletAdapter', () => {
     expect(prompt).toHaveBeenCalled();
   });
 
+  it('rejects invalid kaspium manual txid format', async () => {
+    const prompt = vi.fn().mockReturnValue('badtxid');
+    (globalThis as any).window = {
+      kasware: undefined,
+      kastle: undefined,
+      location: { href: '' },
+      prompt,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    };
+    const { WalletAdapter } = await import('../../src/wallet/WalletAdapter');
+    await expect(
+      WalletAdapter.sendKaspium('kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85', 0.5)
+    ).rejects.toThrow(/Invalid txid format/i);
+  });
+
   it('supports hardware bridge manual txid flow', async () => {
     const prompt = vi.fn().mockReturnValue('b'.repeat(64));
     (globalThis as any).window = {
@@ -269,5 +331,24 @@ describe('WalletAdapter', () => {
     );
     expect(txid).toBe('b'.repeat(64));
     expect(prompt).toHaveBeenCalled();
+  });
+
+  it('rejects invalid hardware bridge txid format', async () => {
+    const prompt = vi.fn().mockReturnValue('not-a-txid');
+    (globalThis as any).window = {
+      prompt,
+      location: { href: '' },
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    };
+    const { WalletAdapter } = await import('../../src/wallet/WalletAdapter');
+    await expect(
+      WalletAdapter.sendHardwareBridge(
+        'onekey',
+        'kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85',
+        0.25
+      )
+    ).rejects.toThrow(/Invalid txid format/i);
   });
 });

@@ -8,6 +8,11 @@ import {
 import { fmt, normalizeKaspaAddress } from "../helpers";
 import { isAddressPrefixCompatible, resolveKaspaNetwork } from "../kaspa/network";
 import { walletError } from "../runtime/errorTaxonomy";
+import { createGhostProvider } from "./providers/ghost";
+import { createHardwareBridgeProvider } from "./providers/hardwareBridge";
+import { createKaspiumProvider } from "./providers/kaspium";
+import { createKastleProvider } from "./providers/kastle";
+import { createKaswareProvider } from "./providers/kasware";
 
 const ALL_KASPA_ADDRESS_PREFIXES = ["kaspa", "kaspatest", "kaspadev", "kaspasim"];
 const WALLET_CALL_TIMEOUT_MS = 15000;
@@ -468,6 +473,96 @@ async function promptForTxidIfNeeded(txid: string, promptLabel: string, rawPaylo
   return pasted.trim();
 }
 
+const kaswareProvider = createKaswareProvider({
+  getKaswareProvider,
+  withTimeout,
+  WALLET_CALL_TIMEOUT_MS,
+  WALLET_SEND_TIMEOUT_MS,
+  resolveKaspaNetwork,
+  DEFAULT_NETWORK,
+  normalizeKaspaAddress,
+  ALL_KASPA_ADDRESS_PREFIXES,
+  ALLOWED_ADDRESS_PREFIXES,
+  ENFORCE_WALLET_NETWORK,
+  NETWORK_LABEL,
+  isAddressPrefixCompatible,
+  normalizeWalletError,
+  parseKaswareBalance,
+  parseKaswareTxid,
+  isLikelyTxid,
+  toSompi,
+});
+
+const kastleProvider = createKastleProvider({
+  getKastleProvider,
+  withTimeout,
+  WALLET_CALL_TIMEOUT_MS,
+  WALLET_SEND_TIMEOUT_MS,
+  KASTLE_CONNECT_TIMEOUT_MS: GHOST_CONNECT_TIMEOUT_MS,
+  resolveKaspaNetwork,
+  DEFAULT_NETWORK,
+  normalizeKaspaAddress,
+  ALL_KASPA_ADDRESS_PREFIXES,
+  ALLOWED_ADDRESS_PREFIXES,
+  ENFORCE_WALLET_NETWORK,
+  NETWORK_LABEL,
+  isAddressPrefixCompatible,
+  normalizeWalletError,
+  toSompi,
+  parseAnyTxid,
+  isLikelyTxid,
+  KASTLE_RAW_TX_ENABLED,
+  KASTLE_TX_BUILDER_URL,
+  KASTLE_RAW_TX_MANUAL_JSON_PROMPT_ENABLED,
+  getKastleRawTxJsonBuilderBridge,
+  buildKastleRawTxJson,
+  normalizeOutputList,
+  kastleNetworkIdForCurrentProfile,
+  setKastleAccountCacheAddress(address: string) {
+    kastleAccountCache = { address, ts: Date.now() };
+  },
+  getKastleCachedAccountAddress() {
+    return kastleAccountCache.address;
+  },
+});
+
+const ghostProvider = createGhostProvider({
+  resolveKaspaNetwork,
+  DEFAULT_NETWORK,
+  normalizeKaspaAddress,
+  ALL_KASPA_ADDRESS_PREFIXES,
+  ALLOWED_ADDRESS_PREFIXES,
+  ENFORCE_WALLET_NETWORK,
+  NETWORK_LABEL,
+  isAddressPrefixCompatible,
+  normalizeWalletError,
+  withTimeout,
+  GHOST_CONNECT_TIMEOUT_MS,
+  WALLET_SEND_TIMEOUT_MS,
+  ghostInvoke,
+  probeGhostProviders,
+  formatKasAmountString,
+  parseAnyTxid,
+  promptForTxidIfNeeded,
+  normalizeOutputList,
+});
+
+const kaspiumProvider = createKaspiumProvider({
+  normalizeKaspaAddress,
+  ALLOWED_ADDRESS_PREFIXES,
+  DEFAULT_NETWORK,
+  KASPIUM_DEEP_LINK_SCHEME,
+  isLikelyTxid,
+});
+
+const hardwareBridgeProvider = createHardwareBridgeProvider({
+  normalizeKaspaAddress,
+  ALLOWED_ADDRESS_PREFIXES,
+  DEFAULT_NETWORK,
+  normalizeOutputList,
+  isLikelyTxid,
+});
+
 export const WalletAdapter = {
   detect() {
     let kasware: any;
@@ -509,384 +604,79 @@ export const WalletAdapter = {
   },
 
   async probeGhostProviders(timeoutMs?: number) {
-    try {
-      return await probeGhostProviders(timeoutMs);
-    } catch {
-      return [];
-    }
+    return ghostProvider.probeProviders(timeoutMs);
   },
 
   async connectKasware() {
-    const w = getKaswareProvider();
-    if (typeof w.requestAccounts !== "function") {
-      throw new Error("Kasware provider missing requestAccounts()");
-    }
-    try {
-      const accounts = await withTimeout(Promise.resolve(w.requestAccounts()), WALLET_CALL_TIMEOUT_MS, "kasware_request_accounts");
-      if(!accounts?.length) throw new Error("No accounts returned from Kasware");
-      const expectedNetwork = resolveKaspaNetwork(DEFAULT_NETWORK);
-      const address = normalizeKaspaAddress(accounts[0], ALL_KASPA_ADDRESS_PREFIXES);
-
-      let walletNetwork = expectedNetwork;
-      if (typeof w.getNetwork === "function") {
-        try {
-          const rawNetwork = await withTimeout(Promise.resolve(w.getNetwork()), WALLET_CALL_TIMEOUT_MS, "kasware_get_network");
-          walletNetwork = resolveKaspaNetwork(rawNetwork);
-        } catch {
-          // Fallback to address-prefix inferred compatibility and expected profile for extension versions
-          // that intermittently fail getNetwork() despite providing valid account access.
-          walletNetwork = expectedNetwork;
-        }
-      }
-
-      if (!isAddressPrefixCompatible(address, walletNetwork)) {
-        throw new Error(
-          `Kasware returned an address prefix that does not match ${walletNetwork.label}. Check wallet network/account and retry.`
-        );
-      }
-
-      if (ENFORCE_WALLET_NETWORK && walletNetwork.id !== expectedNetwork.id) {
-        throw new Error(
-          `Kasware is on ${walletNetwork.label}. Expected ${NETWORK_LABEL}. Switch network in wallet and retry.`
-        );
-      }
-
-      if (!isAddressPrefixCompatible(address, expectedNetwork)) {
-        throw new Error(
-          `Kasware returned a ${walletNetwork.label} address, but ForgeOS is using ${NETWORK_LABEL}. Switch the app profile or wallet network and retry.`
-        );
-      }
-
-      return { address, network: walletNetwork.id, provider: "kasware" };
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Kasware connect failed");
-    }
+    return kaswareProvider.connect();
   },
 
   async connectKastle() {
-    const w = getKastleProvider();
-    try {
-      if (typeof w.connect === "function") {
-        await withTimeout(Promise.resolve(w.connect()), GHOST_CONNECT_TIMEOUT_MS, "kastle_connect");
-      }
-
-      let account = null as any;
-      if (typeof w.getAccount === "function") {
-        account = await withTimeout(Promise.resolve(w.getAccount()), WALLET_CALL_TIMEOUT_MS, "kastle_get_account");
-      } else if (typeof w.request === "function") {
-        account = await withTimeout(Promise.resolve(w.request("kas:get_account")), WALLET_CALL_TIMEOUT_MS, "kastle_request_get_account");
-      } else {
-        throw new Error("Kastle provider missing getAccount()/request()");
-      }
-
-      const address = normalizeKaspaAddress(
-        String(account?.address || account?.addresses?.[0] || ""),
-        ALL_KASPA_ADDRESS_PREFIXES
-      );
-      kastleAccountCache = { address, ts: Date.now() };
-      const expectedNetwork = resolveKaspaNetwork(DEFAULT_NETWORK);
-
-      let walletNetwork = expectedNetwork;
-      if (typeof w.request === "function") {
-        try {
-          const rawNetwork = await withTimeout(
-            Promise.resolve(w.request("kas:get_network")),
-            WALLET_CALL_TIMEOUT_MS,
-            "kastle_get_network"
-          );
-          walletNetwork = resolveKaspaNetwork(rawNetwork?.networkId || rawNetwork);
-        } catch {
-          walletNetwork = expectedNetwork;
-        }
-      }
-
-      if (!isAddressPrefixCompatible(address, walletNetwork)) {
-        throw new Error(
-          `Kastle returned an address prefix that does not match ${walletNetwork.label}. Check wallet network/account and retry.`
-        );
-      }
-      if (ENFORCE_WALLET_NETWORK && walletNetwork.id !== expectedNetwork.id) {
-        throw new Error(
-          `Kastle is on ${walletNetwork.label}. Expected ${NETWORK_LABEL}. Switch network in wallet and retry.`
-        );
-      }
-      if (!isAddressPrefixCompatible(address, expectedNetwork)) {
-        throw new Error(
-          `Kastle returned a ${walletNetwork.label} address, but ForgeOS is using ${NETWORK_LABEL}. Switch the app profile or wallet network and retry.`
-        );
-      }
-      return { address, network: walletNetwork.id, provider: "kastle" };
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Kastle connect failed");
-    }
+    return kastleProvider.connect();
   },
 
   async connectGhost() {
-    try {
-      const account = await withTimeout(
-        ghostInvoke("account", [], GHOST_CONNECT_TIMEOUT_MS),
-        GHOST_CONNECT_TIMEOUT_MS + 1000,
-        "ghost_connect_account"
-      );
-      const addresses = Array.isArray(account?.addresses) ? account.addresses : [];
-      if (!addresses.length) throw new Error("Ghost Wallet did not return any accounts");
-      const expectedNetwork = resolveKaspaNetwork(DEFAULT_NETWORK);
-      const walletNetwork = resolveKaspaNetwork(account?.networkId || expectedNetwork.id);
-      const address = normalizeKaspaAddress(addresses[0], ALL_KASPA_ADDRESS_PREFIXES);
-
-      if (!isAddressPrefixCompatible(address, walletNetwork)) {
-        throw new Error(
-          `Ghost Wallet returned an address prefix that does not match ${walletNetwork.label}. Check wallet network/account and retry.`
-        );
-      }
-      if (ENFORCE_WALLET_NETWORK && walletNetwork.id !== expectedNetwork.id) {
-        throw new Error(
-          `Ghost Wallet is on ${walletNetwork.label}. Expected ${NETWORK_LABEL}. Switch network in wallet and retry.`
-        );
-      }
-      if (!isAddressPrefixCompatible(address, expectedNetwork)) {
-        throw new Error(
-          `Ghost Wallet returned a ${walletNetwork.label} address, but ForgeOS is using ${NETWORK_LABEL}. Switch the app profile or wallet network and retry.`
-        );
-      }
-      return { address, network: walletNetwork.id, provider: "ghost" };
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Ghost Wallet connect failed");
-    }
+    return ghostProvider.connect();
   },
 
   connectKaspium(address: string) {
-    const normalized = normalizeKaspaAddress(address, ALLOWED_ADDRESS_PREFIXES);
-    return { address: normalized, network: DEFAULT_NETWORK, provider: "kaspium" };
+    return kaspiumProvider.connect(address);
   },
 
   async getKaswareBalance() {
-    const w = getKaswareProvider();
-    if (typeof w.getBalance !== "function") throw new Error("Kasware provider missing getBalance()");
-    try {
-      const b = await withTimeout(Promise.resolve(w.getBalance()), WALLET_CALL_TIMEOUT_MS, "kasware_get_balance");
-      return parseKaswareBalance(b);
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Kasware balance failed");
-    }
+    return kaswareProvider.getBalance();
   },
 
   async sendKasware(toAddress: string, amountKas: number) {
-    const w = getKaswareProvider();
-    if (!(Number(amountKas) > 0)) throw new Error("Amount must be greater than zero");
-    const normalizedAddress = normalizeKaspaAddress(toAddress, ALLOWED_ADDRESS_PREFIXES);
-    const sompi = toSompi(amountKas);
-
-    let payload;
-    try {
-      if (typeof w.sendKaspa === "function") {
-        payload = await withTimeout(Promise.resolve(w.sendKaspa(normalizedAddress, sompi)), WALLET_SEND_TIMEOUT_MS, "kasware_send_kaspa");
-      } else if (typeof w.sendKAS === "function") {
-        payload = await withTimeout(Promise.resolve(w.sendKAS(normalizedAddress, sompi)), WALLET_SEND_TIMEOUT_MS, "kasware_send_kas");
-      } else {
-        throw new Error("Kasware provider missing sendKaspa()/sendKAS()");
-      }
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Kasware send failed");
-    }
-
-    const txid = parseKaswareTxid(payload);
-    if (!txid || !isLikelyTxid(txid)) {
-      throw new Error("Kasware did not return a transaction id");
-    }
-    return txid;
+    return kaswareProvider.send(toAddress, amountKas);
   },
 
   async sendKastle(toAddress: string, amountKas: number) {
-    const w = getKastleProvider();
-    if (!(Number(amountKas) > 0)) throw new Error("Amount must be greater than zero");
-    const normalizedAddress = normalizeKaspaAddress(toAddress, ALLOWED_ADDRESS_PREFIXES);
-    const sompi = toSompi(amountKas);
-
-    try {
-      if (typeof w.sendKaspa !== "function") {
-        throw new Error("Kastle provider missing sendKaspa()");
-      }
-      const payload = await withTimeout(
-        Promise.resolve(w.sendKaspa(normalizedAddress, sompi)),
-        WALLET_SEND_TIMEOUT_MS,
-        "kastle_send_kaspa"
-      );
-      const txid = parseAnyTxid(payload);
-      if (!txid || !isLikelyTxid(txid)) {
-        throw new Error("Kastle did not return a transaction id");
-      }
-      return txid;
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Kastle send failed");
-    }
+    return kastleProvider.send(toAddress, amountKas);
   },
 
   canKastleSignAndBroadcastRawTx() {
-    if (!KASTLE_RAW_TX_ENABLED) return false;
-    try {
-      const w = typeof window !== "undefined" ? (window as any).kastle : null;
-      return Boolean(w && typeof w.signAndBroadcastTx === "function");
-    } catch {
-      return false;
-    }
+    return kastleProvider.canSignAndBroadcastRawTx();
   },
 
   canKastleMultiOutputRawTxPath() {
-    if (!this.canKastleSignAndBroadcastRawTx()) return false;
-    if (KASTLE_TX_BUILDER_URL) return true;
-    if (getKastleRawTxJsonBuilderBridge()) return true;
-    if (typeof window === "undefined") return false;
-    return Boolean(KASTLE_RAW_TX_MANUAL_JSON_PROMPT_ENABLED && typeof window.prompt === "function");
+    return kastleProvider.canMultiOutputRawTxPath();
   },
 
   async sendKastleRawTx(outputs: Array<{ to: string; amount_kas: number }>, purpose?: string) {
-    const normalizedOutputs = normalizeOutputList(outputs);
-    if (normalizedOutputs.length <= 1) {
-      const first = normalizedOutputs[0];
-      if (!first) throw new Error("Kastle raw tx requires at least one output");
-      return this.sendKastle(first.to, first.amount_kas);
-    }
-    if (!this.canKastleSignAndBroadcastRawTx()) {
-      throw new Error("Kastle raw multi-output path unavailable (feature disabled or signAndBroadcastTx not detected)");
-    }
-    const w = getKastleProvider();
-    const networkId = kastleNetworkIdForCurrentProfile();
-    try {
-      const txJson = await buildKastleRawTxJson(normalizedOutputs, purpose, kastleAccountCache.address);
-      const payload = await withTimeout(
-        Promise.resolve(w.signAndBroadcastTx(networkId, txJson)),
-        WALLET_SEND_TIMEOUT_MS,
-        "kastle_sign_and_broadcast_tx"
-      );
-      const txid = parseAnyTxid(payload);
-      if (!txid || !isLikelyTxid(txid)) {
-        throw new Error("Kastle signAndBroadcastTx did not return a transaction id");
-      }
-      return txid;
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Kastle raw multi-output send failed");
-    }
+    return kastleProvider.sendRawTx(outputs, purpose);
   },
 
   async sendGhost(toAddress: string, amountKas: number) {
-    if (!(Number(amountKas) > 0)) throw new Error("Amount must be greater than zero");
-    const normalizedAddress = normalizeKaspaAddress(toAddress, ALLOWED_ADDRESS_PREFIXES);
-    try {
-      const payload = await withTimeout(
-        ghostInvoke("transact", [[[normalizedAddress, formatKasAmountString(amountKas)]]], WALLET_SEND_TIMEOUT_MS),
-        WALLET_SEND_TIMEOUT_MS + 1000,
-        "ghost_transact"
-      );
-      const txidCandidate = parseAnyTxid(payload);
-      return await promptForTxidIfNeeded(txidCandidate, "Ghost Wallet", typeof payload === "string" ? payload : JSON.stringify(payload));
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Ghost Wallet send failed");
-    }
+    return ghostProvider.send(toAddress, amountKas);
   },
 
   async sendGhostOutputs(outputs: Array<{ to: string; amount_kas: number }>, _purpose?: string) {
-    const normalizedOutputs = normalizeOutputList(outputs);
-    if (!normalizedOutputs.length) throw new Error("Ghost Wallet outputs are required");
-    if (normalizedOutputs.length === 1) {
-      return this.sendGhost(normalizedOutputs[0].to, normalizedOutputs[0].amount_kas);
-    }
-    try {
-      const payload = await withTimeout(
-        ghostInvoke(
-          "transact",
-          [normalizedOutputs.map((o) => [o.to, formatKasAmountString(o.amount_kas)])],
-          WALLET_SEND_TIMEOUT_MS
-        ),
-        WALLET_SEND_TIMEOUT_MS + 1000,
-        "ghost_transact_multi"
-      );
-      const txidCandidate = parseAnyTxid(payload);
-      return await promptForTxidIfNeeded(
-        txidCandidate,
-        "Ghost Wallet (multi-output)",
-        typeof payload === "string" ? payload : JSON.stringify(payload)
-      );
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Ghost Wallet multi-output send failed");
-    }
+    return ghostProvider.sendOutputs(outputs, _purpose);
   },
 
   // Kaspium currently uses a manual deep-link + txid confirmation flow.
   async sendKaspium(toAddress: string, amountKas: number, note?: string) {
-    const normalizedAddress = normalizeKaspaAddress(toAddress, ALLOWED_ADDRESS_PREFIXES);
-    if (!(Number(amountKas) > 0)) throw new Error("Amount must be greater than zero");
-    if(typeof window === "undefined") throw new Error("Kaspium deep-link is only available in browser environments");
-
-    const encodedAmount = encodeURIComponent(String(amountKas));
-    const encodedNote = note ? encodeURIComponent(note) : "";
-    const kaspaUri = `${normalizedAddress}?amount=${encodedAmount}${note ? `&message=${encodedNote}` : ""}`;
-
-    let deepLink = kaspaUri;
-    if (KASPIUM_DEEP_LINK_SCHEME && !KASPIUM_DEEP_LINK_SCHEME.toLowerCase().startsWith("kaspa")) {
-      const scheme = KASPIUM_DEEP_LINK_SCHEME.endsWith("://")
-        ? KASPIUM_DEEP_LINK_SCHEME
-        : `${KASPIUM_DEEP_LINK_SCHEME}://`;
-      deepLink = `${scheme}send?address=${encodeURIComponent(normalizedAddress)}&amount=${encodedAmount}${note ? `&note=${encodedNote}` : ""}`;
-    }
-
-    window.location.href = deepLink;
-
-    const promptFn = typeof window.prompt === "function" ? window.prompt.bind(window) : null;
-    if (!promptFn) throw new Error("Kaspium confirmation prompt unavailable in this browser context");
-    const txid = promptFn(
-      `Complete transfer in Kaspium and paste txid.\nDeep link:\n${deepLink}\n\nFallback URI:\n${kaspaUri}`
-    );
-    if(!txid) throw new Error("Transaction not confirmed. No txid provided.");
-    if(!isLikelyTxid(txid)) throw new Error("Invalid txid format. Expected a 64-char hex transaction id.");
-
-    return txid.trim();
+    return kaspiumProvider.send(toAddress, amountKas, note);
   },
 
   async signMessageKasware(message: string) {
-    const w = getKaswareProvider();
-    if (typeof w.signMessage !== "function" && typeof w.signData !== "function") {
-      throw new Error("Kasware provider missing signMessage/signData");
-    }
-    try {
-      if (typeof w.signMessage === "function") {
-        return withTimeout(Promise.resolve(w.signMessage(message)), WALLET_CALL_TIMEOUT_MS, "kasware_sign_message");
-      }
-      return withTimeout(Promise.resolve(w.signData(message)), WALLET_CALL_TIMEOUT_MS, "kasware_sign_data");
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Kasware sign failed");
-    }
+    return kaswareProvider.signMessage(message);
   },
 
   async signMessageKastle(message: string) {
-    const w = getKastleProvider();
-    if (typeof w.signMessage !== "function" && typeof w.request !== "function") {
-      throw new Error("Kastle provider missing signMessage/request");
-    }
-    try {
-      if (typeof w.signMessage === "function") {
-        return withTimeout(Promise.resolve(w.signMessage(message)), WALLET_CALL_TIMEOUT_MS, "kastle_sign_message");
-      }
-      return withTimeout(
-        Promise.resolve(w.request("kas:sign_message", message)),
-        WALLET_CALL_TIMEOUT_MS,
-        "kastle_request_sign_message"
-      );
-    } catch (e: any) {
-      throw normalizeWalletError(e, "Kastle sign failed");
-    }
+    return kastleProvider.signMessage(message);
   },
 
   supportsNativeMultiOutput(provider: string) {
     const normalized = String(provider || "").toLowerCase();
     if (normalized === "ghost") return true;
-    if (normalized === "kastle") return this.canKastleMultiOutputRawTxPath();
+    if (normalized === "kastle") return kastleProvider.canMultiOutputRawTxPath();
     return false;
   },
 
   async connectHardwareBridge(provider: "tangem" | "onekey", address: string) {
-    const normalized = normalizeKaspaAddress(address, ALLOWED_ADDRESS_PREFIXES);
-    return { address: normalized, network: DEFAULT_NETWORK, provider };
+    return hardwareBridgeProvider.connect(provider, address);
   },
 
   async sendHardwareBridge(
@@ -896,20 +686,6 @@ export const WalletAdapter = {
     note?: string,
     outputs?: Array<{ to: string; amount_kas: number }>
   ) {
-    const normalizedAddress = normalizeKaspaAddress(toAddress, ALLOWED_ADDRESS_PREFIXES);
-    const outList = normalizeOutputList(outputs || []);
-    if (!(Number(amountKas) > 0) && !outList.length) throw new Error("Amount must be greater than zero");
-    if (typeof window === "undefined" || typeof window.prompt !== "function") {
-      throw new Error(`${String(provider || "Hardware")} bridge flow requires a browser prompt context`);
-    }
-    const lines = outList.length
-      ? outList.map((o, i) => `${i + 1}. ${o.to}  ${o.amount_kas} KAS`).join("\n")
-      : `1. ${normalizedAddress}  ${Number(amountKas).toFixed(8)} KAS`;
-    const txid = window.prompt(
-      `${String(provider || "Hardware").toUpperCase()} bridge flow\n\nCreate and broadcast this transaction in your wallet/device, then paste txid.\n\nOutputs:\n${lines}\n\nNote: ${String(note || "").slice(0, 120)}`
-    );
-    if (!txid) throw new Error("Transaction not confirmed. No txid provided.");
-    if (!isLikelyTxid(String(txid).trim())) throw new Error("Invalid txid format. Expected a 64-char hex transaction id.");
-    return String(txid).trim();
+    return hardwareBridgeProvider.send(provider, toAddress, amountKas, note, outputs);
   }
 };

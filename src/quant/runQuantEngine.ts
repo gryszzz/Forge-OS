@@ -11,6 +11,8 @@ import {
   buildAuditSigningPayloadFromRecord,
   hashCanonical,
 } from "./runQuantEngineAudit";
+import { requestAiOverlayDecision } from "./runQuantEngineAiTransport";
+import { fuseWithQuantCore, resolveAiOverlayPlan } from "./runQuantEngineFusion";
 
 const env = import.meta.env;
 
@@ -41,40 +43,6 @@ const AUDIT_SIGNER_TIMEOUT_MS = Math.max(500, Number(env.VITE_DECISION_AUDIT_SIG
 const AUDIT_SIGNER_REQUIRED = /^(1|true|yes)$/i.test(String(env.VITE_DECISION_AUDIT_SIGNER_REQUIRED || "false"));
 
 const AI_OVERLAY_CACHE = createOverlayDecisionCache(AI_OVERLAY_CACHE_MAX_ENTRIES);
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function aiRetryDelayMs(attempt: number) {
-  const jitter = Math.floor(Math.random() * 90);
-  return 160 * (attempt + 1) + jitter;
-}
-
-function buildHeaders() {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-
-  // If using Anthropic directly from client, key+version headers are required.
-  if (AI_API_URL.includes("api.anthropic.com")) {
-    if (!ANTHROPIC_API_KEY) {
-      throw new Error(
-        "Anthropic API key missing. Set VITE_ANTHROPIC_API_KEY or configure VITE_AI_API_URL to your secure backend endpoint."
-      );
-    }
-    headers["x-api-key"] = ANTHROPIC_API_KEY;
-    headers["anthropic-version"] = "2023-06-01";
-  }
-
-  return headers;
-}
-
-function safeJsonParse(text: string) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error("AI response was not valid JSON");
-  }
-}
 
 function auditSignerHeaders() {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -427,302 +395,6 @@ function sanitizeCachedOverlayDecision(agent: any, cached: CachedOverlayDecision
   );
 }
 
-function resolveAiOverlayPlan(coreDecision: any, cached: CachedOverlayDecision | null) {
-  const now = Date.now();
-  const signature = decisionSignature(coreDecision);
-  const qm = coreDecision?.quant_metrics || {};
-
-  if (!AI_TRANSPORT_READY) {
-    return { kind: "skip" as const, reason: "ai_transport_not_configured", signature };
-  }
-
-  if (AI_OVERLAY_MODE === "off") {
-    return { kind: "skip" as const, reason: "ai_overlay_mode_off", signature };
-  }
-
-  if (AI_OVERLAY_MODE === "always") {
-    return { kind: "call" as const, reason: "ai_overlay_mode_always", signature };
-  }
-
-  if (cached && cached.signature === signature) {
-    const ageMs = Math.max(0, now - cached.ts);
-    if (ageMs <= AI_OVERLAY_MIN_INTERVAL_MS) {
-      return { kind: "reuse" as const, reason: `cache_hit_min_interval_${ageMs}ms`, signature };
-    }
-    if (AI_OVERLAY_MODE === "adaptive" && ageMs <= AI_OVERLAY_CACHE_TTL_MS) {
-      const conf = toFinite(coreDecision?.confidence_score, 0);
-      const risk = toFinite(coreDecision?.risk_score, 1);
-      const riskCeiling = toFinite(qm.risk_ceiling, 0.65);
-      const regime = String(qm.regime || "NEUTRAL");
-      const edge = Math.abs(toFinite(qm.edge_score, 0));
-      const uncertainZone = conf < 0.88 && conf > 0.56;
-      const nearRiskBoundary = Math.abs(risk - riskCeiling) < 0.06;
-      const regimeSensitive = regime === "RISK_OFF" || regime === "RANGE_VOL";
-      if (!uncertainZone && !nearRiskBoundary && !regimeSensitive && edge > 0.2) {
-        return { kind: "reuse" as const, reason: `cache_hit_stable_state_${ageMs}ms`, signature };
-      }
-    }
-  }
-
-  const dataQuality = toFinite(qm.data_quality_score, 0);
-  const confidence = toFinite(coreDecision?.confidence_score, 0);
-  const risk = toFinite(coreDecision?.risk_score, 1);
-  const riskCeiling = toFinite(qm.risk_ceiling, 0.65);
-  const regime = String(qm.regime || "NEUTRAL");
-  const edge = Math.abs(toFinite(qm.edge_score, 0));
-  const samples = toFinite(qm.sample_count, 0);
-  const kelly = toFinite(coreDecision?.kelly_fraction, 0);
-
-  if (dataQuality < 0.4 || samples < 6) {
-    return { kind: "skip" as const, reason: "low_data_quality", signature };
-  }
-
-  const regimeSensitive = regime === "RISK_OFF" || regime === "RANGE_VOL";
-  const nearRiskBoundary = Math.abs(risk - riskCeiling) < 0.08;
-  const uncertainZone = confidence < 0.9 && confidence > 0.58;
-  const lowEdge = edge < 0.12;
-  const highConvictionDeterministic =
-    dataQuality >= 0.72 &&
-    confidence >= 0.88 &&
-    !regimeSensitive &&
-    !nearRiskBoundary &&
-    edge >= 0.25 &&
-    (kelly === 0 || kelly >= 0.02);
-
-  if (highConvictionDeterministic) {
-    return { kind: "skip" as const, reason: "quant_core_high_conviction", signature };
-  }
-
-  if (regimeSensitive || nearRiskBoundary || uncertainZone || lowEdge) {
-    return { kind: "call" as const, reason: "adaptive_uncertain_or_sensitive", signature };
-  }
-
-  return { kind: "skip" as const, reason: "adaptive_cost_control", signature };
-}
-
-function mergeRiskFactors(a: any[], b: any[], extra?: string) {
-  const merged = [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])];
-  if (extra) merged.push(extra);
-  return Array.from(new Set(merged.map((v) => String(v).trim()).filter(Boolean))).slice(0, 6);
-}
-
-function fuseWithQuantCore(agent: any, coreDecision: any, aiDecision: any, aiLatencyMs: number, startedAt: number) {
-  const regime = String(coreDecision?.quant_metrics?.regime || "NEUTRAL");
-  const riskCeiling = toFinite(coreDecision?.quant_metrics?.risk_ceiling, 0.65);
-  const aiAction = String(aiDecision?.action || "HOLD");
-  let action = aiAction;
-  let conflict = false;
-
-  if (regime === "RISK_OFF" && aiAction === "ACCUMULATE") {
-    action = coreDecision.action === "REDUCE" ? "REDUCE" : "HOLD";
-    conflict = true;
-  }
-  if (toFinite(coreDecision?.risk_score, 0) > riskCeiling && aiAction === "ACCUMULATE") {
-    action = coreDecision.action === "REDUCE" ? "REDUCE" : "HOLD";
-    conflict = true;
-  }
-
-  const blendedRisk = round(Math.max(toFinite(coreDecision?.risk_score, 1), toFinite(aiDecision?.risk_score, 1)), 4);
-  let blendedConfidence = round(
-    clamp(
-      toFinite(coreDecision?.confidence_score, 0.5) * 0.58 + toFinite(aiDecision?.confidence_score, 0.5) * 0.42 - (conflict ? 0.08 : 0),
-      0,
-      1
-    ),
-    4
-  );
-
-  if (action === "HOLD") blendedConfidence = Math.min(blendedConfidence, 0.86);
-
-  const kellyCap = toFinite(coreDecision?.quant_metrics?.kelly_cap, toFinite(coreDecision?.kelly_fraction, 0));
-  const blendedKelly = round(
-    clamp(
-      Math.min(
-        Math.max(toFinite(coreDecision?.kelly_fraction, 0) * 0.8, toFinite(aiDecision?.kelly_fraction, 0) * 0.6),
-        kellyCap || 1
-      ),
-      0,
-      1
-    ),
-    4
-  );
-
-  let allocationKas = 0;
-  const coreAlloc = toFinite(coreDecision?.capital_allocation_kas, 0);
-  const aiAlloc = toFinite(aiDecision?.capital_allocation_kas, 0);
-  if (action === "ACCUMULATE") {
-    allocationKas = Math.min(aiAlloc || coreAlloc, coreAlloc * 1.25 || aiAlloc || 0);
-  } else if (action === "REDUCE" || action === "REBALANCE") {
-    allocationKas = Math.min(Math.max(coreAlloc, aiAlloc * 0.75), Math.max(coreAlloc * 1.5, aiAlloc));
-  }
-
-  const riskFactors = mergeRiskFactors(coreDecision?.risk_factors, aiDecision?.risk_factors, conflict ? "AI signal conflict; core risk override applied" : undefined);
-  const aiRationale = String(aiDecision?.rationale || "AI overlay unavailable.").trim();
-  const coreRationale = String(coreDecision?.rationale || "").trim();
-  const rationale = `${coreRationale} AI overlay: ${aiRationale}`.slice(0, 900);
-
-  return sanitizeDecision(
-    {
-      ...aiDecision,
-      action,
-      confidence_score: blendedConfidence,
-      risk_score: blendedRisk,
-      kelly_fraction: blendedKelly,
-      capital_allocation_kas: action === "HOLD" ? 0 : allocationKas,
-      expected_value_pct: round((toFinite(coreDecision?.expected_value_pct, 0) * 0.6) + (toFinite(aiDecision?.expected_value_pct, 0) * 0.4), 2),
-      stop_loss_pct: round(Math.max(toFinite(coreDecision?.stop_loss_pct, 0), toFinite(aiDecision?.stop_loss_pct, 0)), 2),
-      take_profit_pct: round((toFinite(coreDecision?.take_profit_pct, 0) * 0.6) + (toFinite(aiDecision?.take_profit_pct, 0) * 0.4), 2),
-      monte_carlo_win_pct: round((toFinite(coreDecision?.monte_carlo_win_pct, 0) * 0.65) + (toFinite(aiDecision?.monte_carlo_win_pct, 0) * 0.35), 2),
-      volatility_estimate: coreDecision?.volatility_estimate || aiDecision?.volatility_estimate,
-      liquidity_impact: coreDecision?.liquidity_impact || aiDecision?.liquidity_impact,
-      strategy_phase: action === "ACCUMULATE" ? coreDecision?.strategy_phase || aiDecision?.strategy_phase : aiDecision?.strategy_phase || coreDecision?.strategy_phase,
-      rationale,
-      risk_factors: riskFactors,
-      next_review_trigger: coreDecision?.next_review_trigger || aiDecision?.next_review_trigger,
-      decision_source: "hybrid-ai",
-      decision_source_detail: `regime:${regime};ai_latency_ms:${aiLatencyMs};mode:quant_core_guarded`,
-      quant_metrics: {
-        ...(coreDecision?.quant_metrics || {}),
-        ai_overlay_applied: true,
-        ai_action_raw: aiAction,
-        ai_confidence_raw: toFinite(aiDecision?.confidence_score, 0),
-      },
-      engine_latency_ms: Date.now() - startedAt,
-    },
-    agent
-  );
-}
-
-function buildPrompt(agent: any, kasData: any, quantCoreDecision: any) {
-  const compactKasData = {
-    fetched: toFinite(kasData?.fetched, 0),
-    address: String(kasData?.address || ""),
-    walletKas: round(toFinite(kasData?.walletKas, 0), 6),
-    priceUsd: round(toFinite(kasData?.priceUsd, 0), 8),
-    dag: {
-      daaScore: toFinite(kasData?.dag?.daaScore, 0),
-      difficulty: toFinite(kasData?.dag?.difficulty ?? kasData?.dag?.virtualDaaScore, 0),
-      networkName: String(kasData?.dag?.networkName || kasData?.dag?.network || ""),
-      pastMedianTime: toFinite(kasData?.dag?.pastMedianTime ?? kasData?.dag?.virtualPastMedianTime, 0),
-    },
-  };
-  const quantMetrics = quantCoreDecision?.quant_metrics || {};
-  return `You are a quant-grade AI risk overlay for a Kaspa-native autonomous trading engine. The local quant core (deterministic math) has already computed features, regime, Kelly cap, and risk limits. Your job is to refine the decision WITHOUT violating the local risk envelope.
-
-Respond ONLY with a valid JSON object — no markdown, no prose, no code fences.
-
-AGENT PROFILE:
-Name: ${agent.name}
-Strategy: momentum / on-chain flow / risk-controlled execution
-Risk Tolerance: ${agent.risk} (low=conservative, high=aggressive)
-KPI Target: ${agent.kpiTarget}% ROI
-Capital per Cycle: ${agent.capitalLimit} KAS
-Auto-Approve Threshold: ${agent.autoApproveThreshold} KAS
-
-KASPA SNAPSHOT:
-${JSON.stringify(compactKasData)}
-
-LOCAL QUANT CORE PRIOR (trust this as the primary signal unless you have a strong reason):
-${JSON.stringify({
-  action: quantCoreDecision.action,
-  confidence_score: quantCoreDecision.confidence_score,
-  risk_score: quantCoreDecision.risk_score,
-  kelly_fraction: quantCoreDecision.kelly_fraction,
-  capital_allocation_kas: quantCoreDecision.capital_allocation_kas,
-  expected_value_pct: quantCoreDecision.expected_value_pct,
-  stop_loss_pct: quantCoreDecision.stop_loss_pct,
-  take_profit_pct: quantCoreDecision.take_profit_pct,
-  monte_carlo_win_pct: quantCoreDecision.monte_carlo_win_pct,
-  quant_metrics: quantMetrics,
-  rationale: quantCoreDecision.rationale,
-  risk_factors: quantCoreDecision.risk_factors,
-})}
-
-RULES:
-1. Do not exceed quant_metrics.kelly_cap in kelly_fraction.
-2. Do not exceed local quant capital_allocation_kas by more than 25%.
-3. If quant_metrics.regime is RISK_OFF, avoid ACCUMULATE unless confidence_score >= 0.9 and risk_score <= quant_metrics.risk_ceiling.
-4. Preserve strict risk discipline; prefer HOLD over low-quality conviction.
-5. Keep rationale concise and reference actual metrics from the snapshot/core prior.
-
-OUTPUT (strict JSON, all fields required):
-{
-  "action": "ACCUMULATE or REDUCE or HOLD or REBALANCE",
-  "confidence_score": 0.00,
-  "risk_score": 0.00,
-  "kelly_fraction": 0.00,
-  "capital_allocation_kas": 0.00,
-  "capital_allocation_pct": 0,
-  "expected_value_pct": 0.00,
-  "stop_loss_pct": 0.00,
-  "take_profit_pct": 0.00,
-  "monte_carlo_win_pct": 0,
-  "volatility_estimate": "LOW or MEDIUM or HIGH",
-  "liquidity_impact": "MINIMAL or MODERATE or SIGNIFICANT",
-  "strategy_phase": "ENTRY or SCALING or HOLDING or EXIT",
-  "rationale": "Two concise sentences citing specific metrics and why this refines the quant-core prior.",
-  "risk_factors": ["factor1", "factor2", "factor3"],
-  "next_review_trigger": "Describe the specific condition that should trigger next decision cycle"
-}`;
-}
-
-async function requestAiDecision(agent: any, kasData: any, quantCoreDecision: any) {
-  const prompt = buildPrompt(agent, kasData, quantCoreDecision);
-  const body = AI_API_URL.includes("api.anthropic.com")
-    ? { model: AI_MODEL, max_tokens: 900, messages: [{ role: "user", content: prompt }] }
-    : { prompt, agent, kasData, quantCore: quantCoreDecision };
-
-  let data: any;
-  for (let attempt = 0; attempt < AI_MAX_ATTEMPTS; attempt += 1) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
-    try {
-      const res = await fetch(AI_API_URL, {
-        method: "POST",
-        headers: buildHeaders(),
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        const status = Number(res.status || 0);
-        if (AI_RETRYABLE_STATUSES.has(status) && attempt + 1 < AI_MAX_ATTEMPTS) {
-          await sleep(aiRetryDelayMs(attempt));
-          continue;
-        }
-        throw new Error(`AI endpoint ${status || "request_failed"}`);
-      }
-
-      data = await res.json();
-      break;
-    } catch (err: any) {
-      const isTimeout = err?.name === "AbortError";
-      const rawMessage = String(err?.message || "");
-      const isNetworkError = err?.name === "TypeError" || /failed to fetch|network|load failed/i.test(rawMessage);
-      if (!isTimeout && isNetworkError && attempt + 1 < AI_MAX_ATTEMPTS) {
-        await sleep(aiRetryDelayMs(attempt));
-        continue;
-      }
-      throw err;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  if (data?.error?.message) throw new Error(data.error.message);
-
-  // Anthropic shape
-  if (Array.isArray(data?.content)) {
-    const text = data.content.map((block: any) => block.text || "").join("");
-    const parsed = safeJsonParse(text.replace(/```json|```/g, "").trim());
-    return sanitizeDecision({ ...parsed, decision_source: "ai" }, agent);
-  }
-
-  // Backend-proxy shape: { decision: {...} } or direct JSON decision object.
-  if (data?.decision) return sanitizeDecision({ ...data.decision, decision_source: "ai" }, agent);
-  return sanitizeDecision({ ...data, decision_source: "ai" }, agent);
-}
-
 export async function runQuantEngine(agent: any, kasData: any, context?: QuantContext) {
   const startedAt = Date.now();
   const quantCoreDecision = sanitizeDecision(
@@ -734,7 +406,16 @@ export async function runQuantEngine(agent: any, kasData: any, context?: QuantCo
   );
   const cacheKey = agentOverlayCacheKey(agent, kasData);
   const cachedOverlay = getCachedOverlay(cacheKey);
-  const overlayPlan = resolveAiOverlayPlan(quantCoreDecision, cachedOverlay);
+  const overlayPlan = resolveAiOverlayPlan({
+    coreDecision: quantCoreDecision,
+    cached: cachedOverlay,
+    config: {
+      aiTransportReady: AI_TRANSPORT_READY,
+      aiOverlayMode: AI_OVERLAY_MODE,
+      minIntervalMs: AI_OVERLAY_MIN_INTERVAL_MS,
+      cacheTtlMs: AI_OVERLAY_CACHE_TTL_MS,
+    },
+  });
 
   if (
     overlayPlan.kind === "skip" &&
@@ -770,9 +451,29 @@ export async function runQuantEngine(agent: any, kasData: any, context?: QuantCo
 
   const aiStartedAt = Date.now();
   try {
-    const aiDecision = await requestAiDecision(agent, kasData, quantCoreDecision);
+    const aiDecision = await requestAiOverlayDecision({
+      agent,
+      kasData,
+      quantCoreDecision,
+      config: {
+        apiUrl: AI_API_URL,
+        model: AI_MODEL,
+        anthropicApiKey: ANTHROPIC_API_KEY,
+        timeoutMs: AI_TIMEOUT_MS,
+        maxAttempts: AI_MAX_ATTEMPTS,
+        retryableStatuses: AI_RETRYABLE_STATUSES,
+      },
+      sanitizeDecision,
+    });
     const aiLatencyMs = Date.now() - aiStartedAt;
-    const fused = fuseWithQuantCore(agent, quantCoreDecision, aiDecision, aiLatencyMs, startedAt);
+    const fused = fuseWithQuantCore({
+      agent,
+      coreDecision: quantCoreDecision,
+      aiDecision,
+      aiLatencyMs,
+      startedAt,
+      sanitizeDecision,
+    });
     fused.decision_source_detail = appendSourceDetail(fused?.decision_source_detail, `overlay_plan:${overlayPlan.reason}`);
     setCachedOverlay(cacheKey, overlayPlan.signature, fused);
     return finalizeDecisionAuditRecord({

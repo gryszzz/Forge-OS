@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import {
   describeLocalTxPolicyConfig,
   readLocalTxPolicyConfig,
@@ -108,12 +110,29 @@ function fmtRow(row) {
   ].join("  ");
 }
 
+function loadTelemetryProfile() {
+  const raw = String(process.env.TX_POLICY_BENCH_TELEMETRY_PROFILE || "").trim();
+  if (!raw) return null;
+  const profilePath = raw.includes("/") || raw.endsWith(".json")
+    ? path.resolve(process.cwd(), raw)
+    : path.resolve(process.cwd(), "scripts/telemetry-profiles", `${raw}.json`);
+  const text = fs.readFileSync(profilePath, "utf8");
+  const parsed = JSON.parse(text);
+  return {
+    name: String(parsed?.name || raw),
+    observedConfirmP95Ms: envInt("TX_POLICY_BENCH_CONFIRM_P95_MS", Number(parsed?.observedConfirmP95Ms ?? 12000), 0),
+    daaCongestionPct: envInt("TX_POLICY_BENCH_DAA_CONGESTION_PCT", Number(parsed?.daaCongestionPct ?? 45), 0),
+  };
+}
+
 function run() {
   const outputTotalKas = Number(process.env.TX_POLICY_BENCH_OUTPUTS_TOTAL_KAS || 2.4);
   const outputsTotalSompi = Math.round(outputTotalKas * 1e8);
-  const telemetry = {
+  const telemetryProfile = loadTelemetryProfile();
+  const telemetry = telemetryProfile || {
     observedConfirmP95Ms: envInt("TX_POLICY_BENCH_CONFIRM_P95_MS", 12000, 0),
     daaCongestionPct: envInt("TX_POLICY_BENCH_DAA_CONGESTION_PCT", 45, 0),
+    name: "env-default",
   };
   const outputCounts = String(process.env.TX_POLICY_BENCH_OUTPUT_COUNTS || "1,2,4")
     .split(",")

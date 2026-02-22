@@ -123,6 +123,11 @@ describe("scheduler integration (callback retry / idempotency lease recovery)", 
     expect(metricsText).toMatch(/forgeos_scheduler_callback_error_total\s+1/);
     expect(metricsText).toMatch(/forgeos_scheduler_callback_success_total\s+1/);
     expect(metricsText).toMatch(/forgeos_scheduler_callback_dedupe_skipped_total\s+0/);
+
+    const telemetrySummary = await httpJson(`http://127.0.0.1:${schedulerPort}/v1/telemetry-summary`);
+    expect(telemetrySummary.res.status).toBe(200);
+    expect(telemetrySummary.body.ok).toBe(true);
+    expect(telemetrySummary.body.scheduler.queueCapacity).toBeGreaterThan(0);
+    expect(telemetrySummary.body.callbacks).toHaveProperty("latencyP95BucketMs");
   }, 30_000);
 });
-

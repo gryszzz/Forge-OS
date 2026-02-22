@@ -1,5 +1,21 @@
 # FORGE.OS
 
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  46 4F 52 47 45 2E 4F 53  ::  KASPA-NATIVE QUANT / AI CONTROL PLANE         │
+│                                                                              │
+│   ███████╗ ██████╗ ██████╗  ██████╗ ███████╗      ██████╗ ███████╗           │
+│   ██╔════╝██╔═══██╗██╔══██╗██╔════╝ ██╔════╝     ██╔═══██╗██╔════╝           │
+│   █████╗  ██║   ██║██████╔╝██║  ███╗█████╗       ██║   ██║███████╗           │
+│   ██╔══╝  ██║   ██║██╔══██╗██║   ██║██╔══╝       ██║   ██║╚════██║           │
+│   ██║     ╚██████╔╝██║  ██║╚██████╔╝███████╗     ╚██████╔╝███████║           │
+│   ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝      ╚═════╝ ╚══════╝           │
+│                                                                              │
+│  [SIGNING: NON-CUSTODIAL] [NETWORK: MAINNET-FIRST] [TRUTH: RECEIPT-AWARE]   │
+│  [MODE: QUANT CORE + REAL AI OVERLAY] [RUNTIME: OPERATOR-GRADE]             │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
 FORGE.OS is a **Kaspa-native quant trading control plane** with wallet-native signing, real AI overlay, deterministic quant guardrails, and production-oriented runtime controls.
 
 <!-- If you're reading source, you're in the right place. FORGE.OS is built for operators, not just screenshots. -->
@@ -561,6 +577,9 @@ npm run audit-log:verify -- --file ./forgeos-audit.jsonl --strict-signatures
 
 ### Operator Grafana Dashboard (Starter)
 - Import `ops/grafana/forgeos-operator-overview.json` into Grafana.
+- Add Prometheus recording/alert rules:
+  - `ops/prometheus/forgeos-recording-rules.yml`
+  - `ops/prometheus/forgeos-alert-rules.yml`
 - Includes backend truth/control/execution panels for:
   - receipt consistency checks/mismatches + mismatch types (callback-consumer)
   - scheduler queue/saturation and callback duplicate/stale-fence signals

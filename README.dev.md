@@ -217,6 +217,7 @@ Kaspa network:
 - `VITE_DECISION_AUDIT_SIGNER_PUBLIC_KEY_URL` / `VITE_DECISION_AUDIT_SIGNER_PUBLIC_KEY_CACHE_TTL_MS` / `VITE_DECISION_AUDIT_SIGNER_PINNED_FINGERPRINTS` / `VITE_DECISION_AUDIT_SIGNER_REQUIRE_PINNED` (UI-side signature verification + key pinning for decision audit records)
 - `TX_BUILDER_LOCAL_WASM_ENABLED`, `TX_BUILDER_LOCAL_WASM_JSON_KIND`, `TX_BUILDER_KAS_API_MAINNET`, `TX_BUILDER_KAS_API_TESTNET` (local tx-builder mode)
 - `TX_BUILDER_LOCAL_WASM_COIN_SELECTION`, `TX_BUILDER_LOCAL_WASM_MAX_INPUTS`, `TX_BUILDER_LOCAL_WASM_ESTIMATED_NETWORK_FEE_SOMPI`, `TX_BUILDER_LOCAL_WASM_PER_INPUT_FEE_BUFFER_SOMPI`, `TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_MODE`, `TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_*` (local fee/coin-selection policy)
+- `TX_BUILDER_CALLBACK_CONSUMER_SUMMARY_URL` / `TX_BUILDER_SCHEDULER_SUMMARY_URL` / `TX_BUILDER_TELEMETRY_SUMMARY_*` (adaptive fee telemetry auto-feed from backend summaries)
 - `KASTLE_TX_BUILDER_COMMAND_UPSTREAM_URL` / `KASTLE_TX_BUILDER_COMMAND_UPSTREAM_TOKEN` (bundled `TX_BUILDER_COMMAND` HTTP bridge helper)
 - `CALLBACK_CONSUMER_*` (reference downstream callback consumer + receipt ingestion starter)
 - `AUDIT_SIGNER_*` (reference decision audit signer service; local-key or HSM/KMS command mode, optional hash-chained append-only JSONL audit export via `AUDIT_SIGNER_APPEND_LOG_PATH`)
@@ -230,6 +231,10 @@ Load harness / SLO tuning:
 - `LOAD_PIPELINE_SCHEDULER_INSTANCES` (set `2` with Redis URLs to exercise multi-instance leader/fencing behavior)
 - `LOAD_PIPELINE_MAX_CALLBACK_DUPLICATE_EVENTS` / `LOAD_PIPELINE_MAX_CALLBACK_STALE_FENCE_EVENTS` (multi-instance callback safety SLOs)
 - `CALIBRATION_SLO_MAX_BRIER`, `CALIBRATION_SLO_MAX_EV_CAL_ERROR_PCT`, `CALIBRATION_SLO_MIN_REGIME_HIT_RATE_PCT`, `CALIBRATION_SLO_MIN_REGIME_HIT_SAMPLES` (replay calibration regression SLO test thresholds)
+- Prometheus/Grafana ops files:
+  - `ops/grafana/forgeos-operator-overview.json`
+  - `ops/prometheus/forgeos-recording-rules.yml`
+  - `ops/prometheus/forgeos-alert-rules.yml`
 
 AI engine:
 - `VITE_AI_API_URL` (default: Anthropic Messages API)

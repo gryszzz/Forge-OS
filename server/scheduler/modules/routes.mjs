@@ -25,6 +25,20 @@ export function createSchedulerRoutesController(deps) {
     getServiceTokenRegistrySize,
   } = deps;
 
+  function histogramPBucket(hist, quantile = 0.95) {
+    if (!hist || !hist.count || !Array.isArray(hist.buckets) || !(hist.count > 0)) return null;
+    const target = Math.max(0, Math.min(1, Number(quantile || 0.95))) * hist.count;
+    let best = null;
+    for (const bucket of hist.buckets) {
+      const cumulative = Number(hist.counts?.get?.(bucket) || 0);
+      if (cumulative >= target) {
+        best = Number(bucket);
+        break;
+      }
+    }
+    return Number.isFinite(best) ? best : Number(hist.buckets[hist.buckets.length - 1] || 0) || null;
+  }
+
   function listAgents(principal = null) {
     const { agents } = getRuntime();
     const isAdmin = principalHasScope(principal, "admin");
@@ -159,6 +173,47 @@ export function createSchedulerRoutesController(deps) {
         "Cache-Control": "no-store",
       });
       res.end(body);
+      recordHttp(routeKey, 200, startedAt);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/telemetry-summary") {
+      const queueDepth = schedulerUsesRedisAuthoritativeQueue()
+        ? Number(runtime.metrics.redisExecQueueReadyDepth || 0)
+        : runtime.cycleQueue.length;
+      const queueCapacity = Math.max(1, Number(cfg.MAX_QUEUE_DEPTH || 1));
+      const inFlight = Math.max(0, Number(runtime.cycleInFlight || 0));
+      const concurrency = Math.max(1, Number(cfg.CYCLE_CONCURRENCY || 1));
+      const queueRatio = Math.max(0, Math.min(1, queueDepth / queueCapacity));
+      const inFlightRatio = Math.max(0, Math.min(1, inFlight / concurrency));
+      const saturationProxyPct = Math.round(Math.max(queueRatio, inFlightRatio) * 100);
+      json(res, 200, {
+        ok: true,
+        service: "forgeos-scheduler",
+        scheduler: {
+          queueDepth,
+          queueCapacity,
+          inFlight,
+          concurrency,
+          saturated: Boolean(runtime.schedulerSaturated),
+          saturationProxyPct,
+          redisAuthoritativeQueue: schedulerUsesRedisAuthoritativeQueue(),
+          redisExecQueue: schedulerUsesRedisAuthoritativeQueue()
+            ? {
+                readyDepth: Number(runtime.metrics.redisExecQueueReadyDepth || 0),
+                processingDepth: Number(runtime.metrics.redisExecQueueProcessingDepth || 0),
+                inflightDepth: Number(runtime.metrics.redisExecQueueInflightDepth || 0),
+              }
+            : null,
+        },
+        callbacks: {
+          successTotal: Number(runtime.metrics.callbackSuccessTotal || 0),
+          errorTotal: Number(runtime.metrics.callbackErrorTotal || 0),
+          dedupeSkippedTotal: Number(runtime.metrics.callbackDedupeSkippedTotal || 0),
+          latencyP95BucketMs: histogramPBucket(runtime.metrics.callbackLatencyMs, 0.95),
+        },
+        ts: nowMs(),
+      }, origin);
       recordHttp(routeKey, 200, startedAt);
       return;
     }
