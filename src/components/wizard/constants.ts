@@ -14,6 +14,8 @@ export const STRATEGY_TEMPLATES = [
   {
     id: "dca_accumulator",
     name: "Steady DCA Builder",
+    tag: "ACCUMULATION",
+    tagColor: "#00C2A8", // Kaspa green
     class: "accumulation",
     purpose: "Core accumulation engine for steady inventory growth with low drawdown behavior.",
     bestFor: "Range-to-neutral regimes, long accumulation windows, disciplined compounding.",
@@ -31,7 +33,9 @@ export const STRATEGY_TEMPLATES = [
   {
     id: "trend",
     name: "Trend Rider",
-    class: "accumulation",
+    tag: "MOMENTUM",
+    tagColor: "#7C3AED", // Purple
+    class: "momentum",
     purpose: "Compound into persistent directional moves while protecting against reversals.",
     bestFor: "Clear momentum regimes with stable liquidity and improving edge score.",
     desc: "Scales entries with trend persistence and tightens risk when momentum degrades.",
@@ -48,7 +52,9 @@ export const STRATEGY_TEMPLATES = [
   {
     id: "mean_reversion",
     name: "Dip Harvester",
-    class: "accumulation",
+    tag: "REVERSION",
+    tagColor: "#F59E0B", // Amber
+    class: "reversion",
     purpose: "Accumulate discounted KAS during temporary weakness without chasing breakouts.",
     bestFor: "Range regimes, oversold snaps, and volatility normalization after spikes.",
     desc: "Buys weakness with quant-regime gating and reduced chase behavior.",
@@ -65,7 +71,9 @@ export const STRATEGY_TEMPLATES = [
   {
     id: "vol_breakout",
     name: "Volatility Expansion Hunter",
-    class: "accumulation",
+    tag: "BREAKOUT",
+    tagColor: "#EF4444", // Red
+    class: "breakout",
     purpose: "Exploit expansion regimes with tighter automation controls and rapid reviews.",
     bestFor: "Breakout conditions, elevated DAA activity, and strong regime transitions.",
     desc: "Responds to volatility expansion while preserving accumulation-only discipline.",

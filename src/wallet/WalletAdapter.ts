@@ -17,10 +17,13 @@ import {
   NETWORK_LABEL,
   WALLET_CALL_TIMEOUT_MS,
   WALLET_SEND_TIMEOUT_MS,
+  buildKastleRawTxJson,
   formatKasAmountString,
   getKaswareProvider,
+  getKastleCachedAccountAddress,
   getKastleProvider,
   getKastleRawTxJsonBuilderBridge,
+  ghostInvoke,
   isAddressPrefixCompatible,
   isLikelyTxid,
   kastleNetworkIdForCurrentProfile,
@@ -30,17 +33,13 @@ import {
   parseAnyTxid,
   parseKaswareBalance,
   parseKaswareTxid,
+  probeGhostProviders,
   promptForTxidIfNeeded,
   resolveKaspaNetwork,
+  setKastleAccountCacheAddress,
   toSompi,
   withTimeout,
 } from "./walletAdapterInternals";
-import {
-  buildKastleRawTxJson,
-  getKastleCachedAccountAddress,
-  setKastleAccountCacheAddress,
-} from "./walletAdapterKastleRawTxRuntime";
-import { ghostInvoke, probeGhostProviders } from "./walletAdapterGhostRuntime";
 
 const kaswareProvider = createKaswareProvider({
   getKaswareProvider,

@@ -31,8 +31,6 @@ describe("tx-builder local policy", () => {
     delete process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_SCHEDULER_CALLBACK_HIGH_MS;
     delete process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_SCHEDULER_CALLBACK_CRITICAL_MS;
     delete process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_SCHEDULER_CALLBACK_BUMP_SOMPI;
-    delete process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_STALE_HARD_SAFETY_BUMP_SOMPI;
-    delete process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_STALE_HARD_SAFETY_PER_INPUT_SOMPI;
   });
 
   it("selects oldest/smallest-first in auto consolidation mode and computes output_bps fee", async () => {
@@ -199,39 +197,5 @@ describe("tx-builder local policy", () => {
     });
 
     expect(highPressureFee).toBeGreaterThan(lowPressureFee);
-  });
-
-  it("escalates adaptive fee in stale-hard fallback-spike safety mode", async () => {
-    process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_MODE = "adaptive";
-    process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_SOMPI = "1000";
-    process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_PER_INPUT_SOMPI = "0";
-    process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_FRAGMENTATION_BUMP_SOMPI = "0";
-    process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_TRUNCATION_BUMP_SOMPI = "0";
-    process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_DAA_CONGESTION_BUMP_SOMPI = "0";
-    process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_STALE_HARD_SAFETY_BUMP_SOMPI = "15000";
-    process.env.TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_STALE_HARD_SAFETY_PER_INPUT_SOMPI = "1000";
-
-    const policy = await import("../../server/tx-builder/localPolicy.mjs");
-    const baseParams = {
-      requestPriorityFeeSompi: 0,
-      outputsTotalSompi: 150_000_000n,
-      outputCount: 2,
-      config: policy.readLocalTxPolicyConfig(),
-      selectionStats: { selectedInputCount: 3, truncatedByMaxInputs: false },
-    };
-    const staleHardFee = policy.computePriorityFeeSompi({
-      ...baseParams,
-      telemetry: { summaryFreshnessState: "stale_hard" },
-    });
-    const safetyEscalatedFee = policy.computePriorityFeeSompi({
-      ...baseParams,
-      telemetry: {
-        summaryFreshnessState: "stale_hard",
-        summarySafetyMode: "stale_hard_fallback_spike",
-        summarySafetyFallbackRatio: 0.25,
-      },
-    });
-
-    expect(safetyEscalatedFee).toBeGreaterThan(staleHardFee);
   });
 });

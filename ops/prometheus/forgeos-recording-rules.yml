@@ -11,46 +11,6 @@ groups:
           forgeos:callback_consumer:receipt_consistency_mismatch_rate5m
           /
           clamp_min(forgeos:callback_consumer:receipt_consistency_checks_rate5m, 0.000001)
-      - record: forgeos:callback_consumer:calibration_degraded_active
-        expr: max(forgeos_callback_consumer_calibration_degraded_active)
-      - record: forgeos:callback_consumer:calibration_auto_approve_disabled_active
-        expr: max(forgeos_callback_consumer_calibration_auto_approve_disabled)
-      - record: forgeos:callback_consumer:calibration_last_report_age_seconds
-        expr: max(forgeos_callback_consumer_calibration_last_report_age_seconds)
-      - record: forgeos:fleet:callback_consumer:receipt_consistency_checks_rate5m
-        expr: sum(rate(forgeos_callback_consumer_receipt_consistency_checks_total[5m]))
-      - record: forgeos:fleet:callback_consumer:receipt_consistency_mismatch_rate5m
-        expr: sum(rate(forgeos_callback_consumer_receipt_consistency_mismatch_total[5m]))
-      - record: forgeos:fleet:callback_consumer:receipt_consistency_mismatch_ratio5m
-        expr: |
-          forgeos:fleet:callback_consumer:receipt_consistency_mismatch_rate5m
-          /
-          clamp_min(forgeos:fleet:callback_consumer:receipt_consistency_checks_rate5m, 0.000001)
-      - record: forgeos:fleet:callback_consumer:receipt_consistency_mismatch_by_type_rate5m
-        expr: sum by(type) (rate(forgeos_callback_consumer_receipt_consistency_mismatch_by_type_total[5m]))
-      - record: forgeos:fleet:callback_consumer:receipt_consistency_mismatch_by_type_ratio5m
-        expr: |
-          forgeos:fleet:callback_consumer:receipt_consistency_mismatch_by_type_rate5m
-          /
-          clamp_min(forgeos:fleet:callback_consumer:receipt_consistency_checks_rate5m, 0.000001)
-      - record: forgeos:fleet:callback_consumer:calibration_health_avg
-        expr: avg(forgeos_callback_consumer_calibration_health)
-      - record: forgeos:fleet:callback_consumer:calibration_brier_score_avg
-        expr: avg(forgeos_callback_consumer_calibration_brier_score)
-      - record: forgeos:fleet:callback_consumer:calibration_ev_calibration_error_pct_avg
-        expr: avg(forgeos_callback_consumer_calibration_ev_calibration_error_pct)
-      - record: forgeos:fleet:callback_consumer:calibration_regime_hit_rate_pct_avg
-        expr: avg(forgeos_callback_consumer_calibration_regime_hit_rate_pct)
-      - record: forgeos:fleet:callback_consumer:calibration_truth_mismatch_rate_pct_avg
-        expr: avg(forgeos_callback_consumer_calibration_truth_mismatch_rate_pct)
-      - record: forgeos:fleet:callback_consumer:calibration_degraded_instances
-        expr: sum(forgeos_callback_consumer_calibration_degraded_active)
-      - record: forgeos:fleet:callback_consumer:calibration_truth_degraded_instances
-        expr: sum(forgeos_callback_consumer_calibration_truth_degraded)
-      - record: forgeos:fleet:callback_consumer:calibration_auto_approve_disabled_instances
-        expr: sum(forgeos_callback_consumer_calibration_auto_approve_disabled)
-      - record: forgeos:fleet:callback_consumer:calibration_last_report_age_seconds_max
-        expr: max(forgeos_callback_consumer_calibration_last_report_age_seconds)
       - record: forgeos:scheduler:callback_error_ratio5m
         expr: |
           rate(forgeos_scheduler_callback_error_total[5m])
@@ -118,13 +78,3 @@ groups:
           rate(forgeos_tx_builder_telemetry_summary_stale_drops_total[5m])
           /
           clamp_min(rate(forgeos_tx_builder_local_wasm_policy_adaptive_samples_total[5m]), 0.000001)
-      - record: forgeos:tx_builder:telemetry_safety_mode_active
-        expr: max(forgeos_tx_builder_telemetry_safety_mode_active)
-      - record: forgeos:tx_builder:telemetry_safety_mode_escalations_rate5m
-        expr: rate(forgeos_tx_builder_telemetry_safety_mode_escalations_total[5m])
-      - record: forgeos:tx_builder:telemetry_safety_stale_hard_fallback_spike_rate5m
-        expr: rate(forgeos_tx_builder_telemetry_safety_stale_hard_fallback_spike_samples_total[5m])
-      - record: forgeos:tx_builder:telemetry_safety_fallback_ratio
-        expr: max(forgeos_tx_builder_telemetry_safety_fallback_ratio)
-      - record: forgeos:tx_builder:telemetry_safety_window_samples
-        expr: max(forgeos_tx_builder_telemetry_safety_window_samples)

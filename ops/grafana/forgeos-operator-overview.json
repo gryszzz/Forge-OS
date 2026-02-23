@@ -368,128 +368,10 @@
       },
       "id": 9,
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      },
-      "title": "Fleet Calibration / Automation Guardrails",
-      "type": "timeseries",
-      "targets": [
-        {
-          "expr": "forgeos:fleet:callback_consumer:calibration_health_avg",
-          "legendFormat": "fleet calibration health (avg)",
-          "refId": "A"
-        },
-        {
-          "expr": "forgeos:fleet:callback_consumer:calibration_brier_score_avg",
-          "legendFormat": "fleet Brier (avg)",
-          "refId": "B"
-        },
-        {
-          "expr": "forgeos:fleet:callback_consumer:calibration_ev_calibration_error_pct_avg",
-          "legendFormat": "fleet EV cal error % (avg)",
-          "refId": "C"
-        },
-        {
-          "expr": "forgeos:fleet:callback_consumer:calibration_regime_hit_rate_pct_avg",
-          "legendFormat": "fleet regime hit rate % (avg)",
-          "refId": "D"
-        },
-        {
-          "expr": "forgeos:fleet:callback_consumer:calibration_degraded_instances",
-          "legendFormat": "degraded instances",
-          "refId": "E"
-        },
-        {
-          "expr": "forgeos:fleet:callback_consumer:calibration_auto_approve_disabled_instances",
-          "legendFormat": "auto-approve disabled instances",
-          "refId": "F"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 24,
-        "x": 0,
-        "y": 32
-      },
-      "id": 10,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      },
-      "title": "Fleet Truth / Calibration Freshness",
-      "type": "timeseries",
-      "targets": [
-        {
-          "expr": "forgeos:fleet:callback_consumer:receipt_consistency_mismatch_ratio5m",
-          "legendFormat": "fleet truth mismatch ratio (5m)",
-          "refId": "A"
-        },
-        {
-          "expr": "forgeos:fleet:callback_consumer:receipt_consistency_mismatch_by_type_ratio5m{type=\"confirm_ts\"}",
-          "legendFormat": "confirm_ts mismatch ratio",
-          "refId": "B"
-        },
-        {
-          "expr": "forgeos:fleet:callback_consumer:receipt_consistency_mismatch_by_type_ratio5m{type=\"fee\"}",
-          "legendFormat": "fee mismatch ratio",
-          "refId": "C"
-        },
-        {
-          "expr": "forgeos:fleet:callback_consumer:receipt_consistency_mismatch_by_type_ratio5m{type=\"slippage\"}",
-          "legendFormat": "slippage mismatch ratio",
-          "refId": "D"
-        },
-        {
-          "expr": "forgeos:fleet:callback_consumer:calibration_truth_degraded_instances",
-          "legendFormat": "truth degraded instances",
-          "refId": "E"
-        },
-        {
-          "expr": "forgeos:fleet:callback_consumer:calibration_last_report_age_seconds_max",
-          "legendFormat": "max calibration report age (s)",
-          "refId": "F"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 24,
-        "x": 0,
-        "y": 38
-      },
-      "id": 11,
-      "options": {
-        "content": "Fleet panels aggregate callback-consumer truth + calibration signals via recording rules. Use the Forge.OS UI for per-agent calibration details and receipt provenance. Tune alert thresholds from production baselines (see `ops/prometheus/forgeos-alert-rules.yml`).",
+        "content": "Use Forge.OS UI for calibration metrics (`Brier`, `EV calibration error`, `Regime hit-rate`) and truth banners/provenance.\n\nUse this Grafana board for backend truth/control/execution SLOs:\n- receipt consistency mismatch ratio\n- callback duplicate / stale-fence events\n- scheduler saturation\n- tx-builder fee/overfund/fallback efficiency\n- telemetry freshness + stale-drop pressure\n\nTune alert thresholds from production baselines, then lock them in Prometheus rules.",
         "mode": "markdown"
       },
-      "title": "Fleet Ops Guidance",
+      "title": "Calibration / Ops Guidance",
       "type": "text"
     }
   ],
@@ -513,6 +395,6 @@
   "timezone": "",
   "title": "Forge.OS Operator Overview",
   "uid": "forgeos-operator-overview",
-  "version": 4,
+  "version": 3,
   "weekStart": ""
 }

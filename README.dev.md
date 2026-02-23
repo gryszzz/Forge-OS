@@ -218,7 +218,6 @@ Kaspa network:
 - `TX_BUILDER_LOCAL_WASM_ENABLED`, `TX_BUILDER_LOCAL_WASM_JSON_KIND`, `TX_BUILDER_KAS_API_MAINNET`, `TX_BUILDER_KAS_API_TESTNET` (local tx-builder mode)
 - `TX_BUILDER_LOCAL_WASM_COIN_SELECTION`, `TX_BUILDER_LOCAL_WASM_MAX_INPUTS`, `TX_BUILDER_LOCAL_WASM_ESTIMATED_NETWORK_FEE_SOMPI`, `TX_BUILDER_LOCAL_WASM_PER_INPUT_FEE_BUFFER_SOMPI`, `TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_MODE`, `TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_*` (local fee/coin-selection policy)
 - `TX_BUILDER_CALLBACK_CONSUMER_SUMMARY_URL` / `TX_BUILDER_SCHEDULER_SUMMARY_URL` / `TX_BUILDER_TELEMETRY_SUMMARY_*` (adaptive fee telemetry auto-feed from backend summaries)
-- `TX_BUILDER_TELEMETRY_SAFETY_*` + `TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_STALE_HARD_SAFETY_*` (stale-hard + fallback-spike safety mode escalation for adaptive fee tuning)
 - `KASTLE_TX_BUILDER_COMMAND_UPSTREAM_URL` / `KASTLE_TX_BUILDER_COMMAND_UPSTREAM_TOKEN` (bundled `TX_BUILDER_COMMAND` HTTP bridge helper)
 - `CALLBACK_CONSUMER_*` (reference downstream callback consumer + receipt ingestion starter)
 - `AUDIT_SIGNER_*` (reference decision audit signer service; local-key or HSM/KMS command mode, optional hash-chained append-only JSONL audit export via `AUDIT_SIGNER_APPEND_LOG_PATH`)

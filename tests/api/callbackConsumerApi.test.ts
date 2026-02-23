@@ -155,39 +155,4 @@ describe("callbackConsumerApi", () => {
     expect(body.mismatches).toEqual(["confirm_ts", "fee_kas"]);
     expect(body.txid).toBe("e".repeat(64));
   });
-
-  it("posts calibration metrics reports", async () => {
-    const fetchMock = vi.fn(async () => ({ status: 200, ok: true, text: async () => "" }) as any);
-    vi.stubGlobal("fetch", fetchMock);
-    const api = await import("../../src/api/callbackConsumerApi");
-    const ok = await api.postBackendCalibrationMetricsReport({
-      agentId: "agent-1",
-      agentName: "Agent 1",
-      network: "mainnet",
-      walletAddress: "kaspa:qptest",
-      calibrationHealth: 0.58,
-      calibrationTier: "degraded",
-      sizeMultiplier: 0.6,
-      autoApproveDisabled: false,
-      autoApproveDisableDeferred: true,
-      confidenceBrierScore: 0.29,
-      evCalibrationErrorPct: 3.2,
-      regimeHitRatePct: 51,
-      regimeHitSamples: 42,
-      truthDegraded: true,
-      truthMismatchRatePct: 21.5,
-      checkedTs: Date.now(),
-    });
-    expect(ok).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as any;
-    expect(String(url)).toContain("/v1/calibration-metrics");
-    expect(init?.method).toBe("POST");
-    const body = JSON.parse(String(init?.body || "{}"));
-    expect(body.calibrationTier).toBe("degraded");
-    expect(body.calibrationHealth).toBeCloseTo(0.58, 6);
-    expect(body.sizeMultiplier).toBeCloseTo(0.6, 6);
-    expect(body.truthDegraded).toBe(true);
-    expect(body.autoApproveDisableDeferred).toBe(true);
-  });
 });

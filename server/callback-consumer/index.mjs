@@ -31,7 +31,6 @@ const idempotencyMemory = new Map();
 const fenceMemory = new Map();
 const receiptSseClients = new Map();
 let nextReceiptSseClientId = 1;
-let latestCalibrationReport = null;
 
 const metrics = {
   startedAtMs: Date.now(),
@@ -48,22 +47,6 @@ const metrics = {
   receiptConsistencyMismatchTotal: 0,
   receiptConsistencyByTypeTotal: new Map(),
   receiptConsistencyByStatusTotal: new Map(),
-  calibrationReportsTotal: 0,
-  calibrationDegradedReportsTotal: 0,
-  calibrationAutoApproveDisabledReportsTotal: 0,
-  calibrationByTierTotal: new Map(),
-  calibrationLastHealth: 0,
-  calibrationLastSizeMultiplier: 1,
-  calibrationLastBrierScore: 0,
-  calibrationLastEvCalibrationErrorPct: 0,
-  calibrationLastRegimeHitRatePct: 0,
-  calibrationLastRegimeHitSamples: 0,
-  calibrationLastTruthMismatchRatePct: 0,
-  calibrationLastTruthDegraded: false,
-  calibrationLastAutoApproveDisabled: false,
-  calibrationLastAutoApproveDisableDeferred: false,
-  calibrationLastTier: "unknown",
-  calibrationLastCheckedTs: 0,
   receiptSseConnectionsTotal: 0,
   receiptSseEventsTotal: 0,
   redisEnabled: false,
@@ -522,40 +505,6 @@ function normalizeReceiptConsistencyRequest(body) {
   return report;
 }
 
-function normalizeCalibrationMetricsRequest(body) {
-  const tierRaw = String(body?.calibrationTier || body?.tier || "unknown").trim().toLowerCase();
-  const tier = ["healthy", "warn", "watch", "degraded", "critical"].includes(tierRaw)
-    ? tierRaw
-    : "unknown";
-  const checkedTsRaw = Number(body?.checkedTs || 0);
-  const report = {
-    agentId: body?.agentId ? String(body.agentId).slice(0, 120) : null,
-    agentName: body?.agentName ? String(body.agentName).slice(0, 120) : null,
-    network: body?.network ? String(body.network).slice(0, 40) : null,
-    walletAddress: body?.walletAddress ? String(body.walletAddress).slice(0, 120) : null,
-    calibrationHealth:
-      Number.isFinite(Number(body?.calibrationHealth)) ? Math.max(0, Math.min(1.5, Number(body.calibrationHealth))) : null,
-    calibrationTier: tier,
-    sizeMultiplier:
-      Number.isFinite(Number(body?.sizeMultiplier)) ? Math.max(0, Math.min(2, Number(body.sizeMultiplier))) : null,
-    autoApproveDisabled: Boolean(body?.autoApproveDisabled),
-    autoApproveDisableDeferred: Boolean(body?.autoApproveDisableDeferred),
-    confidenceBrierScore:
-      Number.isFinite(Number(body?.confidenceBrierScore)) ? Math.max(0, Math.min(2, Number(body.confidenceBrierScore))) : null,
-    evCalibrationErrorPct:
-      Number.isFinite(Number(body?.evCalibrationErrorPct)) ? Math.max(0, Math.min(1000, Number(body.evCalibrationErrorPct))) : null,
-    regimeHitRatePct:
-      Number.isFinite(Number(body?.regimeHitRatePct)) ? Math.max(0, Math.min(100, Number(body.regimeHitRatePct))) : null,
-    regimeHitSamples:
-      Number.isFinite(Number(body?.regimeHitSamples)) ? Math.max(0, Math.round(Number(body.regimeHitSamples))) : null,
-    truthDegraded: Boolean(body?.truthDegraded),
-    truthMismatchRatePct:
-      Number.isFinite(Number(body?.truthMismatchRatePct)) ? Math.max(0, Math.min(100, Number(body.truthMismatchRatePct))) : null,
-    checkedTs: Number.isFinite(checkedTsRaw) && checkedTsRaw > 0 ? Math.round(checkedTsRaw) : nowMs(),
-  };
-  return report;
-}
-
 function pushRecentEvent(entry) {
   recentEvents.unshift(entry);
   if (recentEvents.length > MAX_EVENTS) recentEvents.length = MAX_EVENTS;
@@ -629,21 +578,6 @@ function buildTelemetrySummary() {
       consistencyChecksTotal: metrics.receiptConsistencyChecksTotal,
       consistencyMismatchTotal: metrics.receiptConsistencyMismatchTotal,
     },
-    calibration: latestCalibrationReport
-      ? {
-          health: metrics.calibrationLastHealth,
-          tier: metrics.calibrationLastTier,
-          brierScore: metrics.calibrationLastBrierScore,
-          evCalibrationErrorPct: metrics.calibrationLastEvCalibrationErrorPct,
-          regimeHitRatePct: metrics.calibrationLastRegimeHitRatePct,
-          regimeHitSamples: metrics.calibrationLastRegimeHitSamples,
-          truthDegraded: metrics.calibrationLastTruthDegraded,
-          truthMismatchRatePct: metrics.calibrationLastTruthMismatchRatePct,
-          autoApproveDisabled: metrics.calibrationLastAutoApproveDisabled,
-          checkedTs: metrics.calibrationLastCheckedTs || null,
-          ageMs: metrics.calibrationLastCheckedTs > 0 ? Math.max(0, now - metrics.calibrationLastCheckedTs) : null,
-        }
-      : null,
     ts: now,
   };
 }
@@ -700,62 +634,6 @@ function exportPrometheus() {
   push("# TYPE forgeos_callback_consumer_receipt_consistency_by_status_total counter");
   push("# HELP forgeos_callback_consumer_receipt_consistency_mismatch_by_type_total Receipt consistency mismatches by mismatch type.");
   push("# TYPE forgeos_callback_consumer_receipt_consistency_mismatch_by_type_total counter");
-  push("# HELP forgeos_callback_consumer_calibration_reports_total Calibration snapshots reported by clients.");
-  push("# TYPE forgeos_callback_consumer_calibration_reports_total counter");
-  push(`forgeos_callback_consumer_calibration_reports_total ${metrics.calibrationReportsTotal}`);
-  push("# HELP forgeos_callback_consumer_calibration_degraded_reports_total Calibration snapshots marked degraded/critical or truth-degraded.");
-  push("# TYPE forgeos_callback_consumer_calibration_degraded_reports_total counter");
-  push(`forgeos_callback_consumer_calibration_degraded_reports_total ${metrics.calibrationDegradedReportsTotal}`);
-  push("# HELP forgeos_callback_consumer_calibration_auto_approve_disabled_reports_total Calibration snapshots with auto-approve disabled.");
-  push("# TYPE forgeos_callback_consumer_calibration_auto_approve_disabled_reports_total counter");
-  push(`forgeos_callback_consumer_calibration_auto_approve_disabled_reports_total ${metrics.calibrationAutoApproveDisabledReportsTotal}`);
-  push("# HELP forgeos_callback_consumer_calibration_health Latest reported calibration health.");
-  push("# TYPE forgeos_callback_consumer_calibration_health gauge");
-  push(`forgeos_callback_consumer_calibration_health ${metrics.calibrationLastHealth}`);
-  push("# HELP forgeos_callback_consumer_calibration_size_multiplier Latest reported calibration sizing multiplier.");
-  push("# TYPE forgeos_callback_consumer_calibration_size_multiplier gauge");
-  push(`forgeos_callback_consumer_calibration_size_multiplier ${metrics.calibrationLastSizeMultiplier}`);
-  push("# HELP forgeos_callback_consumer_calibration_brier_score Latest reported confidence Brier score.");
-  push("# TYPE forgeos_callback_consumer_calibration_brier_score gauge");
-  push(`forgeos_callback_consumer_calibration_brier_score ${metrics.calibrationLastBrierScore}`);
-  push("# HELP forgeos_callback_consumer_calibration_ev_calibration_error_pct Latest reported EV calibration error pct.");
-  push("# TYPE forgeos_callback_consumer_calibration_ev_calibration_error_pct gauge");
-  push(`forgeos_callback_consumer_calibration_ev_calibration_error_pct ${metrics.calibrationLastEvCalibrationErrorPct}`);
-  push("# HELP forgeos_callback_consumer_calibration_regime_hit_rate_pct Latest reported regime hit rate pct.");
-  push("# TYPE forgeos_callback_consumer_calibration_regime_hit_rate_pct gauge");
-  push(`forgeos_callback_consumer_calibration_regime_hit_rate_pct ${metrics.calibrationLastRegimeHitRatePct}`);
-  push("# HELP forgeos_callback_consumer_calibration_regime_hit_samples Latest reported regime hit samples.");
-  push("# TYPE forgeos_callback_consumer_calibration_regime_hit_samples gauge");
-  push(`forgeos_callback_consumer_calibration_regime_hit_samples ${metrics.calibrationLastRegimeHitSamples}`);
-  push("# HELP forgeos_callback_consumer_calibration_truth_mismatch_rate_pct Latest reported truth mismatch rate pct from UI guardrails.");
-  push("# TYPE forgeos_callback_consumer_calibration_truth_mismatch_rate_pct gauge");
-  push(`forgeos_callback_consumer_calibration_truth_mismatch_rate_pct ${metrics.calibrationLastTruthMismatchRatePct}`);
-  push("# HELP forgeos_callback_consumer_calibration_truth_degraded Latest reported truth degradation state (1/0).");
-  push("# TYPE forgeos_callback_consumer_calibration_truth_degraded gauge");
-  push(`forgeos_callback_consumer_calibration_truth_degraded ${metrics.calibrationLastTruthDegraded ? 1 : 0}`);
-  push("# HELP forgeos_callback_consumer_calibration_auto_approve_disabled Latest reported auto-approve disabled state (1/0).");
-  push("# TYPE forgeos_callback_consumer_calibration_auto_approve_disabled gauge");
-  push(`forgeos_callback_consumer_calibration_auto_approve_disabled ${metrics.calibrationLastAutoApproveDisabled ? 1 : 0}`);
-  push("# HELP forgeos_callback_consumer_calibration_auto_approve_disable_deferred Latest reported deferred auto-approve disable state (1/0).");
-  push("# TYPE forgeos_callback_consumer_calibration_auto_approve_disable_deferred gauge");
-  push(`forgeos_callback_consumer_calibration_auto_approve_disable_deferred ${metrics.calibrationLastAutoApproveDisableDeferred ? 1 : 0}`);
-  push("# HELP forgeos_callback_consumer_calibration_degraded_active Latest calibration degraded-active state (critical/degraded tier or truth-degraded).");
-  push("# TYPE forgeos_callback_consumer_calibration_degraded_active gauge");
-  push(
-    `forgeos_callback_consumer_calibration_degraded_active ${
-      (metrics.calibrationLastTruthDegraded || metrics.calibrationLastTier === "degraded" || metrics.calibrationLastTier === "critical") ? 1 : 0
-    }`
-  );
-  push("# HELP forgeos_callback_consumer_calibration_last_checked_ts_ms Latest calibration report checked timestamp (ms).");
-  push("# TYPE forgeos_callback_consumer_calibration_last_checked_ts_ms gauge");
-  push(`forgeos_callback_consumer_calibration_last_checked_ts_ms ${metrics.calibrationLastCheckedTs}`);
-  push("# HELP forgeos_callback_consumer_calibration_last_report_age_seconds Age of latest calibration report in seconds.");
-  push("# TYPE forgeos_callback_consumer_calibration_last_report_age_seconds gauge");
-  push(
-    `forgeos_callback_consumer_calibration_last_report_age_seconds ${
-      metrics.calibrationLastCheckedTs > 0 ? ((nowMs() - metrics.calibrationLastCheckedTs) / 1000).toFixed(3) : "0"
-    }`
-  );
   push("# HELP forgeos_callback_consumer_receipt_sse_connections_total Receipt SSE connections opened.");
   push("# TYPE forgeos_callback_consumer_receipt_sse_connections_total counter");
   push(`forgeos_callback_consumer_receipt_sse_connections_total ${metrics.receiptSseConnectionsTotal}`);
@@ -799,18 +677,6 @@ function exportPrometheus() {
   for (const [kind, v] of metrics.receiptConsistencyByTypeTotal.entries()) {
     push(
       `forgeos_callback_consumer_receipt_consistency_mismatch_by_type_total{type="${esc(kind)}"} ${v}`
-    );
-  }
-  for (const [tier, v] of metrics.calibrationByTierTotal.entries()) {
-    push(
-      `forgeos_callback_consumer_calibration_by_tier_total{tier="${esc(tier)}"} ${v}`
-    );
-  }
-  for (const tier of ["healthy", "warn", "watch", "degraded", "critical", "unknown"]) {
-    push(
-      `forgeos_callback_consumer_calibration_tier_state{tier="${tier}"} ${
-        metrics.calibrationLastTier === tier ? 1 : 0
-      }`
     );
   }
   return `${lines.join("\n")}\n`;
@@ -1060,60 +926,6 @@ const server = http.createServer(async (req, res) => {
       recordHttp(routeKey, 200);
     } catch (e) {
       json(res, 400, { error: { message: String(e?.message || "invalid_receipt_consistency") } }, origin);
-      recordHttp(routeKey, 400);
-    }
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/v1/calibration-metrics") {
-    let body;
-    try {
-      body = await readJson(req);
-      const report = normalizeCalibrationMetricsRequest(body);
-      latestCalibrationReport = report;
-      metrics.calibrationReportsTotal += 1;
-      inc(metrics.calibrationByTierTotal, report.calibrationTier || "unknown");
-      const degradedActive = Boolean(
-        report.truthDegraded || report.calibrationTier === "degraded" || report.calibrationTier === "critical"
-      );
-      if (degradedActive) metrics.calibrationDegradedReportsTotal += 1;
-      if (report.autoApproveDisabled) metrics.calibrationAutoApproveDisabledReportsTotal += 1;
-      metrics.calibrationLastHealth = Number.isFinite(Number(report.calibrationHealth)) ? Number(report.calibrationHealth) : 0;
-      metrics.calibrationLastSizeMultiplier = Number.isFinite(Number(report.sizeMultiplier)) ? Number(report.sizeMultiplier) : 1;
-      metrics.calibrationLastBrierScore =
-        Number.isFinite(Number(report.confidenceBrierScore)) ? Number(report.confidenceBrierScore) : 0;
-      metrics.calibrationLastEvCalibrationErrorPct =
-        Number.isFinite(Number(report.evCalibrationErrorPct)) ? Number(report.evCalibrationErrorPct) : 0;
-      metrics.calibrationLastRegimeHitRatePct =
-        Number.isFinite(Number(report.regimeHitRatePct)) ? Number(report.regimeHitRatePct) : 0;
-      metrics.calibrationLastRegimeHitSamples =
-        Number.isFinite(Number(report.regimeHitSamples)) ? Number(report.regimeHitSamples) : 0;
-      metrics.calibrationLastTruthMismatchRatePct =
-        Number.isFinite(Number(report.truthMismatchRatePct)) ? Number(report.truthMismatchRatePct) : 0;
-      metrics.calibrationLastTruthDegraded = Boolean(report.truthDegraded);
-      metrics.calibrationLastAutoApproveDisabled = Boolean(report.autoApproveDisabled);
-      metrics.calibrationLastAutoApproveDisableDeferred = Boolean(report.autoApproveDisableDeferred);
-      metrics.calibrationLastTier = String(report.calibrationTier || "unknown");
-      metrics.calibrationLastCheckedTs = Math.max(0, Number(report.checkedTs || nowMs()));
-
-      if (degradedActive) {
-        pushRecentEvent({
-          id: crypto.randomUUID(),
-          type: "calibration_degraded",
-          ts: nowMs(),
-          agentId: report.agentId,
-          agentName: report.agentName,
-          tier: report.calibrationTier,
-          health: report.calibrationHealth,
-          truthDegraded: report.truthDegraded,
-          truthMismatchRatePct: report.truthMismatchRatePct,
-          autoApproveDisabled: report.autoApproveDisabled,
-        });
-      }
-      json(res, 200, { ok: true, accepted: true, ts: nowMs() }, origin);
-      recordHttp(routeKey, 200);
-    } catch (e) {
-      json(res, 400, { error: { message: String(e?.message || "invalid_calibration_metrics") } }, origin);
       recordHttp(routeKey, 400);
     }
     return;

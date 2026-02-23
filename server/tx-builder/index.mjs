@@ -48,15 +48,6 @@ const TELEMETRY_SUMMARY_STALE_HARD_MS = Math.max(
 const TELEMETRY_SUMMARY_REQUIRE_FRESH = /^(1|true|yes)$/i.test(
   String(process.env.TX_BUILDER_TELEMETRY_SUMMARY_REQUIRE_FRESH || "false")
 );
-const TELEMETRY_SAFETY_WINDOW_SIZE = Math.max(5, Math.round(Number(process.env.TX_BUILDER_TELEMETRY_SAFETY_WINDOW_SIZE || 48)));
-const TELEMETRY_SAFETY_MIN_BUILDS = Math.max(1, Math.round(Number(process.env.TX_BUILDER_TELEMETRY_SAFETY_MIN_BUILDS || 8)));
-const TELEMETRY_SAFETY_FALLBACK_SPIKE_RATIO = Math.max(
-  0,
-  Math.min(1, Number(process.env.TX_BUILDER_TELEMETRY_SAFETY_FALLBACK_SPIKE_RATIO || 0.12))
-);
-const TELEMETRY_SAFETY_ESCALATE_ON_STALE_HARD = /^(1|true|yes)$/i.test(
-  String(process.env.TX_BUILDER_TELEMETRY_SAFETY_ESCALATE_ON_STALE_HARD || "true")
-);
 
 const metrics = {
   startedAtMs: Date.now(),
@@ -100,13 +91,6 @@ const metrics = {
   telemetrySummaryStaleSoftTotal: 0,
   telemetrySummaryStaleHardTotal: 0,
   telemetrySummaryStaleDropsTotal: 0,
-  telemetrySafetyModeActive: 0,
-  telemetrySafetyModeEscalationsTotal: 0,
-  telemetrySafetyStaleHardFallbackSpikeSamplesTotal: 0,
-  telemetrySafetyWindowSamples: 0,
-  telemetrySafetyFallbackRatio: 0,
-  telemetrySafetyLastMode: "",
-  telemetrySafetyLastActivatedTs: 0,
 };
 
 let kaspaWasmPromise = null;
@@ -115,8 +99,6 @@ const telemetrySummaryCache = {
   callback: { ts: 0, value: null, inFlight: null, lastError: "" },
   scheduler: { ts: 0, value: null, inFlight: null, lastError: "" },
 };
-const telemetrySafetyFallbackWindow = [];
-let lastTelemetrySafetyMode = "";
 
 function nowMs() {
   return Date.now();
@@ -335,29 +317,6 @@ function telemetryCacheAgeMs(kind) {
   return Math.max(0, nowMs() - slot.ts);
 }
 
-function recordTelemetrySafetyBuildOutcome(fallbackUsedAllInputs) {
-  telemetrySafetyFallbackWindow.push({
-    ts: nowMs(),
-    fallbackUsedAllInputs: Boolean(fallbackUsedAllInputs),
-  });
-  const maxSize = Math.max(TELEMETRY_SAFETY_WINDOW_SIZE, 1);
-  if (telemetrySafetyFallbackWindow.length > maxSize) {
-    telemetrySafetyFallbackWindow.splice(0, telemetrySafetyFallbackWindow.length - maxSize);
-  }
-}
-
-function telemetrySafetyWindowState() {
-  const samples = telemetrySafetyFallbackWindow.length;
-  if (!samples) return { samples: 0, fallbackCount: 0, fallbackRatio: 0, fallbackSpike: false };
-  let fallbackCount = 0;
-  for (const row of telemetrySafetyFallbackWindow) {
-    if (row?.fallbackUsedAllInputs) fallbackCount += 1;
-  }
-  const fallbackRatio = fallbackCount / samples;
-  const fallbackSpike = samples >= TELEMETRY_SAFETY_MIN_BUILDS && fallbackRatio >= TELEMETRY_SAFETY_FALLBACK_SPIKE_RATIO;
-  return { samples, fallbackCount, fallbackRatio, fallbackSpike };
-}
-
 function telemetryFreshnessState({ needsConfirm, needsCongestion }) {
   const callbackAgeMs = needsConfirm ? telemetryCacheAgeMs("callback") : null;
   const schedulerAgeMs = needsCongestion ? telemetryCacheAgeMs("scheduler") : null;
@@ -441,26 +400,6 @@ async function getAdaptiveTelemetry(inputTelemetry) {
   metrics.telemetrySummaryFreshnessMaxAgeMs = Math.max(0, Math.round(Number(freshness.maxAgeMs || 0)));
   if (freshness.state === "stale_soft") metrics.telemetrySummaryStaleSoftTotal += 1;
   if (freshness.state === "stale_hard") metrics.telemetrySummaryStaleHardTotal += 1;
-  const safetyWindow = telemetrySafetyWindowState();
-  metrics.telemetrySafetyWindowSamples = safetyWindow.samples;
-  metrics.telemetrySafetyFallbackRatio = Number(safetyWindow.fallbackRatio.toFixed(6));
-
-  let summarySafetyMode = "";
-  if (TELEMETRY_SAFETY_ESCALATE_ON_STALE_HARD && freshness.state === "stale_hard" && safetyWindow.fallbackSpike) {
-    summarySafetyMode = "stale_hard_fallback_spike";
-    metrics.telemetrySafetyStaleHardFallbackSpikeSamplesTotal += 1;
-    metrics.telemetrySafetyModeActive = 1;
-    metrics.telemetrySafetyLastActivatedTs = nowMs();
-  } else {
-    metrics.telemetrySafetyModeActive = 0;
-  }
-  if (summarySafetyMode && summarySafetyMode !== lastTelemetrySafetyMode) {
-    metrics.telemetrySafetyModeEscalationsTotal += 1;
-    lastTelemetrySafetyMode = summarySafetyMode;
-  } else if (!summarySafetyMode) {
-    lastTelemetrySafetyMode = "";
-  }
-  metrics.telemetrySafetyLastMode = summarySafetyMode;
 
   if (freshness.state === "missing" && TELEMETRY_SUMMARY_REQUIRE_FRESH) {
     throw new Error("telemetry_summary_missing_required");
@@ -475,9 +414,6 @@ async function getAdaptiveTelemetry(inputTelemetry) {
       ...(inputTelemetry && typeof inputTelemetry === "object" ? { ...inputTelemetry } : {}),
       summaryFreshnessState: "stale_hard",
       summaryFreshnessMaxAgeMs: Math.max(0, Math.round(Number(freshness.maxAgeMs || 0))),
-      ...(summarySafetyMode ? { summarySafetyMode } : {}),
-      summarySafetyFallbackRatio: Number(safetyWindow.fallbackRatio.toFixed(6)),
-      summarySafetyWindowSamples: safetyWindow.samples,
     };
   }
 
@@ -486,9 +422,6 @@ async function getAdaptiveTelemetry(inputTelemetry) {
     ...merged,
     summaryFreshnessState: freshness.state,
     summaryFreshnessMaxAgeMs: Math.max(0, Math.round(Number(freshness.maxAgeMs || 0))),
-    ...(summarySafetyMode ? { summarySafetyMode } : {}),
-    summarySafetyFallbackRatio: Number(safetyWindow.fallbackRatio.toFixed(6)),
-    summarySafetyWindowSamples: safetyWindow.samples,
   };
 }
 
@@ -644,7 +577,6 @@ async function buildTxJsonLocalWasm(payload) {
     metrics.localWasmPolicyPriorityFeeSompiTotal += Number(policyMeta.priorityFeeSompi || 0);
     if (policyMeta.truncatedByMaxInputs) metrics.localWasmPolicyTruncatedSelectionsTotal += 1;
     if (policyMeta.fallbackUsedAllInputs) metrics.localWasmPolicyFallbackAllInputsTotal += 1;
-    recordTelemetrySafetyBuildOutcome(policyMeta.fallbackUsedAllInputs);
     inc(metrics.localWasmPolicySelectionModeTotal, String(policyMeta.selectionMode || "auto"));
     inc(metrics.localWasmPolicyPriorityFeeModeTotal, String(policyMeta.priorityFeeMode || "request_or_fixed"));
     if (policyMeta.priorityFeeMode === "adaptive") {
@@ -902,21 +834,6 @@ function exportPrometheus() {
   push("# HELP forgeos_tx_builder_telemetry_summary_stale_drops_total Adaptive telemetry requests that dropped summary-derived signals due to stale-hard summaries.");
   push("# TYPE forgeos_tx_builder_telemetry_summary_stale_drops_total counter");
   push(`forgeos_tx_builder_telemetry_summary_stale_drops_total ${metrics.telemetrySummaryStaleDropsTotal}`);
-  push("# HELP forgeos_tx_builder_telemetry_safety_mode_active Telemetry safety mode active (1/0).");
-  push("# TYPE forgeos_tx_builder_telemetry_safety_mode_active gauge");
-  push(`forgeos_tx_builder_telemetry_safety_mode_active ${metrics.telemetrySafetyModeActive}`);
-  push("# HELP forgeos_tx_builder_telemetry_safety_mode_escalations_total Telemetry safety mode escalation transitions.");
-  push("# TYPE forgeos_tx_builder_telemetry_safety_mode_escalations_total counter");
-  push(`forgeos_tx_builder_telemetry_safety_mode_escalations_total ${metrics.telemetrySafetyModeEscalationsTotal}`);
-  push("# HELP forgeos_tx_builder_telemetry_safety_stale_hard_fallback_spike_samples_total Adaptive telemetry requests hitting stale-hard + fallback-spike safety mode.");
-  push("# TYPE forgeos_tx_builder_telemetry_safety_stale_hard_fallback_spike_samples_total counter");
-  push(`forgeos_tx_builder_telemetry_safety_stale_hard_fallback_spike_samples_total ${metrics.telemetrySafetyStaleHardFallbackSpikeSamplesTotal}`);
-  push("# HELP forgeos_tx_builder_telemetry_safety_window_samples Recent local-wasm build samples tracked for telemetry safety fallback spike detection.");
-  push("# TYPE forgeos_tx_builder_telemetry_safety_window_samples gauge");
-  push(`forgeos_tx_builder_telemetry_safety_window_samples ${metrics.telemetrySafetyWindowSamples}`);
-  push("# HELP forgeos_tx_builder_telemetry_safety_fallback_ratio Ratio of fallback-all-inputs in the telemetry safety window.");
-  push("# TYPE forgeos_tx_builder_telemetry_safety_fallback_ratio gauge");
-  push(`forgeos_tx_builder_telemetry_safety_fallback_ratio ${metrics.telemetrySafetyFallbackRatio}`);
   push("# HELP forgeos_tx_builder_uptime_seconds Service uptime.");
   push("# TYPE forgeos_tx_builder_uptime_seconds gauge");
   push(`forgeos_tx_builder_uptime_seconds ${((nowMs() - metrics.startedAtMs) / 1000).toFixed(3)}`);
@@ -972,21 +889,12 @@ const server = http.createServer(async (req, res) => {
           staleSoftMs: TELEMETRY_SUMMARY_STALE_SOFT_MS,
           staleHardMs: TELEMETRY_SUMMARY_STALE_HARD_MS,
           requireFresh: TELEMETRY_SUMMARY_REQUIRE_FRESH,
-          safetyWindowSize: TELEMETRY_SAFETY_WINDOW_SIZE,
-          safetyMinBuilds: TELEMETRY_SAFETY_MIN_BUILDS,
-          safetyFallbackSpikeRatio: TELEMETRY_SAFETY_FALLBACK_SPIKE_RATIO,
-          safetyEscalateOnStaleHard: TELEMETRY_SAFETY_ESCALATE_ON_STALE_HARD,
           callbackCacheAgeMs: telemetrySummaryCache.callback.ts ? nowMs() - telemetrySummaryCache.callback.ts : null,
           schedulerCacheAgeMs: telemetrySummaryCache.scheduler.ts ? nowMs() - telemetrySummaryCache.scheduler.ts : null,
           callbackLastError: telemetrySummaryCache.callback.lastError || null,
           schedulerLastError: telemetrySummaryCache.scheduler.lastError || null,
           freshnessStateCode: metrics.telemetrySummaryFreshnessStateCode,
           freshnessMaxAgeMs: metrics.telemetrySummaryFreshnessMaxAgeMs || null,
-          safetyModeActive: Boolean(metrics.telemetrySafetyModeActive),
-          safetyMode: metrics.telemetrySafetyLastMode || null,
-          safetyWindowSamples: metrics.telemetrySafetyWindowSamples,
-          safetyFallbackRatio: metrics.telemetrySafetyFallbackRatio,
-          safetyLastActivatedTs: metrics.telemetrySafetyLastActivatedTs || null,
         },
       },
       ts: nowMs(),

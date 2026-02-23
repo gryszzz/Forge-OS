@@ -1,4 +1,4 @@
-import { ACCUMULATION_VAULT, DEFAULT_NETWORK } from "../../constants";
+import { DEFAULT_NETWORK } from "../../constants";
 import { shortAddr } from "../../helpers";
 import { C, mono } from "../../tokens";
 import { Btn, Card } from "../ui";
@@ -19,21 +19,9 @@ export const WStep3 = ({d, wallet, onDeploy}: any) => {
           </div>
         ))}
       </Card>
-      {strategyMeta?.purpose && (
-        <div style={{background:C.s2, border:`1px solid ${C.border}`, borderRadius:4, padding:"10px 14px", marginBottom:12}}>
-          <div style={{fontSize:11, color:C.dim, ...mono, marginBottom:4}}>STRATEGY PURPOSE</div>
-          <div style={{fontSize:12, color:C.text, marginBottom:4}}>{strategyMeta.purpose}</div>
-          {strategyMeta.bestFor && <div style={{fontSize:11, color:C.dim}}>Best for: {strategyMeta.bestFor}</div>}
-        </div>
-      )}
-      <div style={{background:C.s2, border:`1px solid ${C.border}`, borderRadius:4, padding:"9px 14px", marginBottom:12, fontSize:11, color:C.dim}}>
-        Shared portfolio allocation and risk weighting are auto-managed by Forge.OS. Your primary funding input is <span style={{color:C.text, ...mono}}>Capital / Cycle (KAS)</span>.
-      </div>
-      <div style={{background:C.wLow, border:`1px solid ${C.warn}30`, borderRadius:4, padding:"10px 14px", marginBottom:16, fontSize:12, color:C.dim}}>
-        Deployment triggers a wallet signature to provision the agent vault. Vault address: <span style={{color:C.accent, ...mono}}>{shortAddr(ACCUMULATION_VAULT)}</span>
-      </div>
       <Btn onClick={onDeploy} disabled={!canDeploy} style={{width:"100%", padding:"11px 0"}}>DEPLOY AGENT — SIGN WITH WALLET</Btn>
       {!canDeploy && <div style={{fontSize:11, color:C.warn, marginTop:6, textAlign:"center", ...mono}}>Name, capital, and target required.</div>}
     </div>
   );
 };
+

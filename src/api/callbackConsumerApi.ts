@@ -31,25 +31,6 @@ export type BackendReceiptConsistencyReport = {
   slippageDiffKas?: number;
 };
 
-export type BackendCalibrationMetricsReport = {
-  agentId?: string;
-  agentName?: string;
-  network?: string;
-  walletAddress?: string;
-  calibrationHealth?: number;
-  calibrationTier?: "healthy" | "warn" | "watch" | "degraded" | "critical" | string;
-  sizeMultiplier?: number;
-  autoApproveDisabled?: boolean;
-  autoApproveDisableDeferred?: boolean;
-  confidenceBrierScore?: number;
-  evCalibrationErrorPct?: number;
-  regimeHitRatePct?: number;
-  regimeHitSamples?: number;
-  truthDegraded?: boolean;
-  truthMismatchRatePct?: number;
-  checkedTs?: number;
-};
-
 const env = (import.meta as any)?.env || {};
 const RECEIPT_API_URL = String(env.VITE_EXECUTION_RECEIPT_API_URL || "").trim().replace(/\/+$/, "");
 const RECEIPT_API_TOKEN = String(env.VITE_EXECUTION_RECEIPT_API_TOKEN || "").trim();
@@ -215,71 +196,6 @@ export async function postBackendReceiptConsistencyReport(report: BackendReceipt
           Number.isFinite(Number(report?.feeDiffKas)) ? Math.max(0, Number(Number(report?.feeDiffKas).toFixed(8))) : undefined,
         slippageDiffKas:
           Number.isFinite(Number(report?.slippageDiffKas)) ? Math.max(0, Number(Number(report?.slippageDiffKas).toFixed(8))) : undefined,
-      }),
-      ...(controller ? { signal: controller.signal } : {}),
-    });
-    if (!res.ok) return false;
-    return true;
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-}
-
-export async function postBackendCalibrationMetricsReport(report: BackendCalibrationMetricsReport): Promise<boolean> {
-  if (!backendReceiptMetricsConfigured()) return false;
-  if (typeof fetch !== "function") throw new Error("backend_calibration_metrics_fetch_unavailable");
-
-  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const timeoutId = controller ? setTimeout(() => controller.abort(), RECEIPT_API_TIMEOUT_MS) : null;
-  try {
-    const res = await fetch(`${RECEIPT_API_URL}/v1/calibration-metrics`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...(RECEIPT_API_TOKEN ? { Authorization: `Bearer ${RECEIPT_API_TOKEN}` } : {}),
-      },
-      body: JSON.stringify({
-        agentId: report?.agentId ? String(report.agentId).slice(0, 120) : undefined,
-        agentName: report?.agentName ? String(report.agentName).slice(0, 120) : undefined,
-        network: report?.network ? String(report.network).slice(0, 40) : undefined,
-        walletAddress: report?.walletAddress ? String(report.walletAddress).slice(0, 120) : undefined,
-        calibrationHealth:
-          Number.isFinite(Number(report?.calibrationHealth))
-            ? Math.max(0, Math.min(1.5, Number(Number(report?.calibrationHealth).toFixed(6))))
-            : undefined,
-        calibrationTier: report?.calibrationTier ? String(report.calibrationTier).slice(0, 32) : undefined,
-        sizeMultiplier:
-          Number.isFinite(Number(report?.sizeMultiplier))
-            ? Math.max(0, Math.min(2, Number(Number(report?.sizeMultiplier).toFixed(6))))
-            : undefined,
-        autoApproveDisabled: Boolean(report?.autoApproveDisabled),
-        autoApproveDisableDeferred: Boolean(report?.autoApproveDisableDeferred),
-        confidenceBrierScore:
-          Number.isFinite(Number(report?.confidenceBrierScore))
-            ? Math.max(0, Math.min(2, Number(Number(report?.confidenceBrierScore).toFixed(6))))
-            : undefined,
-        evCalibrationErrorPct:
-          Number.isFinite(Number(report?.evCalibrationErrorPct))
-            ? Math.max(0, Math.min(1000, Number(Number(report?.evCalibrationErrorPct).toFixed(6))))
-            : undefined,
-        regimeHitRatePct:
-          Number.isFinite(Number(report?.regimeHitRatePct))
-            ? Math.max(0, Math.min(100, Number(Number(report?.regimeHitRatePct).toFixed(6))))
-            : undefined,
-        regimeHitSamples:
-          Number.isFinite(Number(report?.regimeHitSamples))
-            ? Math.max(0, Math.round(Number(report?.regimeHitSamples)))
-            : undefined,
-        truthDegraded: Boolean(report?.truthDegraded),
-        truthMismatchRatePct:
-          Number.isFinite(Number(report?.truthMismatchRatePct))
-            ? Math.max(0, Math.min(100, Number(Number(report?.truthMismatchRatePct).toFixed(6))))
-            : undefined,
-        checkedTs:
-          Number.isFinite(Number(report?.checkedTs))
-            ? Math.max(0, Math.round(Number(report?.checkedTs)))
-            : undefined,
       }),
       ...(controller ? { signal: controller.signal } : {}),
     });

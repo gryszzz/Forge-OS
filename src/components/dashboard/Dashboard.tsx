@@ -30,7 +30,6 @@ import { derivePnlAttribution } from "../../analytics/pnlAttribution";
 import { formatForgeError, normalizeError } from "../../runtime/errorTaxonomy";
 import { buildQueueTxItem } from "../../tx/queueTx";
 import { WalletAdapter } from "../../wallet/WalletAdapter";
-import { postBackendCalibrationMetricsReport } from "../../api/callbackConsumerApi";
 import { useAgentLifecycle } from "./hooks/useAgentLifecycle";
 import { useAutoCycleLoop } from "./hooks/useAutoCycleLoop";
 import { useAlerts } from "./hooks/useAlerts";
@@ -80,7 +79,6 @@ export function Dashboard({agent, wallet, agents = [], activeAgentId, onSelectAg
   const runtimeScope = `${DEFAULT_NETWORK}:${String(wallet?.address || "unknown").toLowerCase()}:${String(agent?.agentId || agent?.name || "default").toLowerCase()}`;
   const cycleLockRef = useRef(false);
   const lastRegimeRef = useRef("");
-  const lastCalibrationMetricsReportRef = useRef<{ sig: string; ts: number }>({ sig: "", ts: 0 });
   const [runtimeHydrated, setRuntimeHydrated] = useState(false);
   const [tab, setTab] = useState("overview");
   const { status, setStatus, transitionAgentStatus } = useAgentLifecycle("RUNNING");
@@ -248,53 +246,6 @@ export function Dashboard({agent, wallet, agents = [], activeAgentId, onSelectAg
       truthMismatchSignals: truth.mismatches,
     };
   }, [executionGuardrails.truth, pnlAttributionBase]);
-
-  useEffect(() => {
-    const calibration = executionGuardrails?.calibration;
-    const truth = executionGuardrails?.truth;
-    if (!calibration || !truth) return;
-
-    const payload = {
-      agentId: String(agent?.agentId || agent?.name || ""),
-      agentName: String(agent?.name || ""),
-      network: DEFAULT_NETWORK,
-      walletAddress: String(wallet?.address || ""),
-      calibrationHealth: Number(calibration.health || 0),
-      calibrationTier: String(calibration.tier || "unknown"),
-      sizeMultiplier: Number(calibration.sizeMultiplier || 1),
-      autoApproveDisabled: Boolean(executionGuardrails?.autoApproveDisabled),
-      autoApproveDisableDeferred: Boolean(calibration.autoApproveDisableDeferred),
-      confidenceBrierScore: Number(calibration.metrics?.brier || 0),
-      evCalibrationErrorPct: Number(calibration.metrics?.evCalErrorPct || 0),
-      regimeHitRatePct: Number(calibration.metrics?.regimeHitRatePct || 0),
-      regimeHitSamples: Number(calibration.metrics?.regimeHitSamples || 0),
-      truthDegraded: Boolean(truth.degraded),
-      truthMismatchRatePct: Number(truth.mismatchRatePct || 0),
-      checkedTs: Date.now(),
-    };
-    const sig = JSON.stringify({
-      a: payload.agentId,
-      n: payload.network,
-      h: Number(payload.calibrationHealth.toFixed(4)),
-      t: payload.calibrationTier,
-      s: Number(payload.sizeMultiplier.toFixed(4)),
-      ad: payload.autoApproveDisabled,
-      dd: payload.autoApproveDisableDeferred,
-      b: Number(payload.confidenceBrierScore.toFixed(4)),
-      e: Number(payload.evCalibrationErrorPct.toFixed(3)),
-      r: Number(payload.regimeHitRatePct.toFixed(2)),
-      rs: payload.regimeHitSamples,
-      td: payload.truthDegraded,
-      tm: Number(payload.truthMismatchRatePct.toFixed(2)),
-    });
-    const now = Date.now();
-    const last = lastCalibrationMetricsReportRef.current;
-    if (last.sig === sig && now - last.ts < 15000) return;
-    lastCalibrationMetricsReportRef.current = { sig, ts: now };
-    void postBackendCalibrationMetricsReport(payload).catch(() => {
-      // Best-effort metrics export only; do not block runtime execution on observability.
-    });
-  }, [agent?.agentId, agent?.name, wallet?.address, executionGuardrails, DEFAULT_NETWORK]);
 
   useDashboardRuntimePersistence({
     agent,

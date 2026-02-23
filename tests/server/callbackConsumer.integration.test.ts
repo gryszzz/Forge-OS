@@ -183,29 +183,6 @@ describe("callback consumer reference service", () => {
     expect(consistency2.res.status).toBe(200);
     expect(consistency2.body.ok).toBe(true);
 
-    const calibration = await httpJson(`http://127.0.0.1:${port}/v1/calibration-metrics`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agentId: "agent-1",
-        agentName: "Agent 1",
-        network: "mainnet",
-        calibrationHealth: 0.57,
-        calibrationTier: "degraded",
-        sizeMultiplier: 0.6,
-        autoApproveDisabled: false,
-        autoApproveDisableDeferred: true,
-        confidenceBrierScore: 0.28,
-        evCalibrationErrorPct: 3.4,
-        regimeHitRatePct: 48,
-        regimeHitSamples: 32,
-        truthDegraded: true,
-        truthMismatchRatePct: 25,
-      }),
-    });
-    expect(calibration.res.status).toBe(200);
-    expect(calibration.body.ok).toBe(true);
-
     const summary = await httpJson(`http://127.0.0.1:${port}/v1/telemetry-summary`);
     expect(summary.res.status).toBe(200);
     expect(summary.body.ok).toBe(true);
@@ -213,9 +190,6 @@ describe("callback consumer reference service", () => {
     expect(summary.body.receipts.confirmationLatencyMs).toBeTruthy();
     expect(summary.body.truth.consistencyChecksTotal).toBe(2);
     expect(summary.body.truth.consistencyMismatchTotal).toBe(1);
-    expect(summary.body.calibration).toBeTruthy();
-    expect(summary.body.calibration.tier).toBe("degraded");
-    expect(summary.body.calibration.truthDegraded).toBe(true);
 
     const metricsRes = await fetch(`http://127.0.0.1:${port}/metrics`);
     const metricsText = await metricsRes.text();
@@ -227,10 +201,6 @@ describe("callback consumer reference service", () => {
     expect(metricsText).toContain("forgeos_callback_consumer_receipt_consistency_mismatch_total 1");
     expect(metricsText).toContain('forgeos_callback_consumer_receipt_consistency_mismatch_by_type_total{type="confirm_ts"} 1');
     expect(metricsText).toContain('forgeos_callback_consumer_receipt_consistency_mismatch_by_type_total{type="fee_kas"} 1');
-    expect(metricsText).toContain("forgeos_callback_consumer_calibration_reports_total 1");
-    expect(metricsText).toContain("forgeos_callback_consumer_calibration_degraded_reports_total 1");
-    expect(metricsText).toContain('forgeos_callback_consumer_calibration_tier_state{tier="degraded"} 1');
-    expect(metricsText).toContain("forgeos_callback_consumer_calibration_truth_degraded 1");
 
     try { sseController.abort(); } catch {}
   }, 20_000);

@@ -12,46 +12,6 @@ groups:
           summary: "Receipt consistency mismatch ratio high"
           description: "Backend vs chain receipt mismatch ratio exceeded 10% for 5m. Investigate truth pipeline and degrade automation."
 
-      - alert: ForgeOSFleetReceiptConsistencyMismatchRateHigh
-        expr: forgeos:fleet:callback_consumer:receipt_consistency_mismatch_ratio5m > 0.1 and forgeos:fleet:callback_consumer:receipt_consistency_checks_rate5m > 0.05
-        for: 5m
-        labels:
-          severity: warning
-          service: callback-consumer
-        annotations:
-          summary: "Fleet receipt consistency mismatch ratio high"
-          description: "Aggregated backend-vs-chain receipt mismatch ratio exceeded 10% for 5m across callback-consumer instances. Investigate truth pipeline, fleet skew, and degrade automation."
-
-      - alert: ForgeOSCalibrationDegradedDuration
-        expr: forgeos:callback_consumer:calibration_degraded_active > 0 and forgeos:callback_consumer:calibration_last_report_age_seconds < 180
-        for: 15m
-        labels:
-          severity: warning
-          service: callback-consumer
-        annotations:
-          summary: "Calibration health degraded for a sustained duration"
-          description: "Client-reported calibration/truth degraded state has remained active for 15m. Reduce automation, review Brier/EV/regime metrics, and inspect truth pipeline consistency."
-
-      - alert: ForgeOSFleetCalibrationDegradedDuration
-        expr: forgeos:fleet:callback_consumer:calibration_degraded_instances > 0 and forgeos:fleet:callback_consumer:calibration_last_report_age_seconds_max < 180
-        for: 15m
-        labels:
-          severity: warning
-          service: callback-consumer
-        annotations:
-          summary: "Fleet calibration degraded state sustained"
-          description: "One or more callback-consumer instances report degraded calibration/truth state for 15m. Review calibration health, truth mismatch rates, and auto-approve disable states fleet-wide."
-
-      - alert: ForgeOSCalibrationMetricsStale
-        expr: forgeos:callback_consumer:calibration_last_report_age_seconds > 900
-        for: 10m
-        labels:
-          severity: warning
-          service: callback-consumer
-        annotations:
-          summary: "Calibration telemetry is stale"
-          description: "No fresh calibration metrics have been reported to callback-consumer for >15m. Prometheus/Grafana calibration visibility may be stale."
-
       - alert: ForgeOSSchedulerCallbackErrorsHigh
         expr: forgeos:scheduler:callback_error_ratio5m > 0.05
         for: 5m
@@ -121,16 +81,6 @@ groups:
         annotations:
           summary: "Tx-builder telemetry stale and coin selection degraded"
           description: "Adaptive telemetry is stale-hard while fallback-all-inputs is elevated. Execution quality is likely degraded; inspect summary endpoints and tx-builder policy."
-
-      - alert: ForgeOSTxBuilderTelemetrySafetyModeActive
-        expr: forgeos:tx_builder:telemetry_safety_mode_active > 0
-        for: 5m
-        labels:
-          severity: critical
-          service: tx-builder
-        annotations:
-          summary: "Tx-builder telemetry safety mode active"
-          description: "Tx-builder adaptive fee mode is in stale-hard + fallback-spike safety mode. Execution quality is under stress; inspect telemetry freshness, callback-consumer/scheduler summaries, and UTXO fragmentation."
 
       - alert: ForgeOSDuplicateOrStaleFenceCallbacks
         expr: rate(forgeos_callback_consumer_cycle_duplicate_total[5m]) > 0 or rate(forgeos_callback_consumer_cycle_stale_fence_total[5m]) > 0

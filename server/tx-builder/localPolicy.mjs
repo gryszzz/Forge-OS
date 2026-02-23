@@ -60,8 +60,6 @@ export function readLocalTxPolicyConfig() {
     priorityFeeAdaptiveSchedulerCallbackHighMs: envInt("TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_SCHEDULER_CALLBACK_HIGH_MS", 500, 0),
     priorityFeeAdaptiveSchedulerCallbackCriticalMs: envInt("TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_SCHEDULER_CALLBACK_CRITICAL_MS", 2500, 0),
     priorityFeeAdaptiveSchedulerCallbackBumpSompi: envInt("TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_SCHEDULER_CALLBACK_BUMP_SOMPI", 2_500, 0),
-    priorityFeeAdaptiveStaleHardSafetyBumpSompi: envInt("TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_STALE_HARD_SAFETY_BUMP_SOMPI", 12_000, 0),
-    priorityFeeAdaptiveStaleHardSafetyPerInputSompi: envInt("TX_BUILDER_LOCAL_WASM_PRIORITY_FEE_ADAPTIVE_STALE_HARD_SAFETY_PER_INPUT_SOMPI", 800, 0),
     preferConsolidation: envBool("TX_BUILDER_LOCAL_WASM_PREFER_CONSOLIDATION", true),
   };
 }
@@ -155,8 +153,6 @@ export function computePriorityFeeSompi({ requestPriorityFeeSompi, outputsTotalS
     const selectedInputCount = Math.max(0, Math.round(Number(selectionStats?.selectedInputCount || 0)));
     const truncatedByMaxInputs = Boolean(selectionStats?.truncatedByMaxInputs);
     const summaryFreshnessState = String(telemetry?.summaryFreshnessState || "").toLowerCase();
-    const summarySafetyMode = String(telemetry?.summarySafetyMode || "").toLowerCase();
-    const safetyEscalated = summarySafetyMode === "stale_hard_fallback_spike";
     const staleHard = summaryFreshnessState === "stale_hard";
     const staleSoft = summaryFreshnessState === "stale_soft";
     const confirmP95Ms = staleHard
@@ -203,13 +199,6 @@ export function computePriorityFeeSompi({ requestPriorityFeeSompi, outputsTotalS
         schedulerCallbackSeverity *
         freshnessDampen
       );
-    }
-    if (safetyEscalated) {
-      const safetyFloor =
-        adaptiveBase +
-        Math.max(0, Math.round(cfg.priorityFeeAdaptiveStaleHardSafetyBumpSompi || 0)) +
-        selectedInputCount * Math.max(0, Math.round(cfg.priorityFeeAdaptiveStaleHardSafetyPerInputSompi || 0));
-      fee = Math.max(fee, safetyFloor);
     }
     return clampPriorityFeeSompi(fee, cfg);
   }
@@ -300,8 +289,6 @@ export function selectUtxoEntriesForLocalBuild({ entries, outputsTotalSompi, out
     });
     adaptiveSignals = {
       summaryFreshnessState: String(telemetry?.summaryFreshnessState || "fresh"),
-      summarySafetyMode: String(telemetry?.summarySafetyMode || ""),
-      summarySafetyFallbackRatio: Math.max(0, Math.min(1, Number(telemetry?.summarySafetyFallbackRatio || 0))),
       observedConfirmP95Ms: Math.max(0, Math.round(Number(telemetry?.observedConfirmP95Ms || telemetry?.confirmP95Ms || 0))),
       daaCongestionPct: clamp(Number(telemetry?.daaCongestionPct || 0), 0, 100),
       receiptLagP95Ms: Math.max(0, Math.round(Number(telemetry?.receiptLagP95Ms || telemetry?.observedReceiptLagP95Ms || 0))),
@@ -391,8 +378,6 @@ export function describeLocalTxPolicyConfig(config = readLocalTxPolicyConfig()) 
     priorityFeeAdaptiveSchedulerCallbackHighMs: config.priorityFeeAdaptiveSchedulerCallbackHighMs,
     priorityFeeAdaptiveSchedulerCallbackCriticalMs: config.priorityFeeAdaptiveSchedulerCallbackCriticalMs,
     priorityFeeAdaptiveSchedulerCallbackBumpSompi: config.priorityFeeAdaptiveSchedulerCallbackBumpSompi,
-    priorityFeeAdaptiveStaleHardSafetyBumpSompi: config.priorityFeeAdaptiveStaleHardSafetyBumpSompi,
-    priorityFeeAdaptiveStaleHardSafetyPerInputSompi: config.priorityFeeAdaptiveStaleHardSafetyPerInputSompi,
     preferConsolidation: config.preferConsolidation,
   };
 }

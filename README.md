@@ -527,7 +527,6 @@ Provides:
 - command-hook mode (`TX_BUILDER_COMMAND`) for local Kaspa tx-builder integration
 - bundled command executable `server/tx-builder/commands/kastle-http-bridge-command.mjs` for real `TX_BUILDER_COMMAND` deployments that proxy a dedicated builder
 - upstream proxy mode (`TX_BUILDER_UPSTREAM_URL`)
-- adaptive fee auto-feed from backend telemetry summaries (`callback-consumer` + `scheduler`) with freshness + stale-hard safety escalation controls
 - `GET /health`
 - `GET /metrics`
 
@@ -583,10 +582,8 @@ npm run audit-log:verify -- --file ./forgeos-audit.jsonl --strict-signatures
   - `ops/prometheus/forgeos-alert-rules.yml`
 - Includes backend truth/control/execution panels for:
   - receipt consistency checks/mismatches + mismatch types (callback-consumer)
-  - fleet-level calibration/truth aggregation (callback-consumer recording rules)
   - scheduler queue/saturation and callback duplicate/stale-fence signals
   - tx-builder local policy efficiency (selected inputs / fee / fallback usage)
-  - tx-builder adaptive telemetry freshness + safety mode indicators
 
 <details>
 <summary><strong>Hidden Ops Notes (GitHub-friendly collapsible)</strong></summary>
