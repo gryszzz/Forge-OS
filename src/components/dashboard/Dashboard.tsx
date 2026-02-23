@@ -42,8 +42,8 @@ import { useKaspaFeed } from "./hooks/useKaspaFeed";
 import { usePortfolioAllocator } from "./hooks/usePortfolioAllocator";
 import { useTreasuryPayout } from "./hooks/useTreasuryPayout";
 import { SigningModal } from "../SigningModal";
-import { Badge, Btn, Card, ExtLink, Label } from "../ui";
-import { EXEC_OPTS } from "../wizard/constants";
+import { Badge, Btn, Card, ExtLink, Label, Inp } from "../ui";
+import { EXEC_OPTS, STRATEGY_TEMPLATES, PROFESSIONAL_PRESETS, RISK_OPTS } from "../wizard/constants";
 import { ActionQueue } from "./ActionQueue";
 import { DashboardMissionControlBadges } from "./DashboardMissionControlBadges";
 import { DashboardRuntimeNotices } from "./DashboardRuntimeNotices";
@@ -91,9 +91,46 @@ export function Dashboard({agent, wallet, agents = [], activeAgentId, onSelectAg
   const [usage, setUsage] = useState(() => getUsageState(FREE_CYCLES_PER_DAY, usageScope));
   const [liveExecutionArmed, setLiveExecutionArmed] = useState(LIVE_EXECUTION_DEFAULT);
   const [nextAutoCycleAt, setNextAutoCycleAt] = useState(() => Date.now() + cycleIntervalMs);
-  const [viewportWidth, setViewportWidth] = useState(
+const [viewportWidth, setViewportWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1200
   );
+  const [editingStrategy, setEditingStrategy] = useState(false);
+  const [editForm, setEditForm] = useState({
+    strategyTemplate: agent.strategyTemplate || "dca_accumulator",
+    strategyLabel: agent.strategyLabel || "Steady DCA Builder",
+    risk: agent.risk || "medium",
+    kpiTarget: agent.kpiTarget || "12",
+    capitalLimit: agent.capitalLimit || "5000",
+    horizon: agent.horizon || 30,
+    autoApproveThreshold: agent.autoApproveThreshold || "50",
+    execMode: agent.execMode || "manual",
+  });
+  
+  const allStrategies = [...STRATEGY_TEMPLATES, ...PROFESSIONAL_PRESETS.filter(p => p.id !== "custom")];
+  
+  const handleStrategySelect = (strategy: any) => {
+    setEditForm({
+      ...editForm,
+      strategyTemplate: strategy.id,
+      strategyLabel: strategy.name,
+      risk: strategy.defaults.risk || "medium",
+      kpiTarget: strategy.defaults.kpiTarget || "12",
+      capitalLimit: agent.capitalLimit || "5000",
+      horizon: strategy.defaults.horizon || 30,
+      autoApproveThreshold: strategy.defaults.autoApproveThreshold || "50",
+      execMode: strategy.defaults.execMode || "manual",
+    });
+  };
+  
+  const handleSaveStrategy = () => {
+    // Save to agent - this would typically call a parent handler or persist
+    setEditingStrategy(false);
+    addLog({
+      type:"SYSTEM", 
+      msg:`Strategy updated to ${editForm.strategyLabel}`, 
+      fee:null
+    });
+  };
   const quantClientMode = useMemo(() => getQuantEngineClientMode(), []);
 
   const {
@@ -913,6 +950,151 @@ export function Dashboard({agent, wallet, agents = [], activeAgentId, onSelectAg
       {/* ── CONTROLS ── */}
       {tab==="controls" && (
         <div style={{display:"grid", gridTemplateColumns:controlsGridCols, gap:14}}>
+          {/* Strategy Management Card */}
+          <Card p={20} style={{gridColumn: "1 / -1"}}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16}}>
+              <Label>Strategy Configuration</Label>
+              <Btn onClick={()=>setEditingStrategy(!editingStrategy)} variant={editingStrategy ? "warn" : "primary"} size="sm">
+                {editingStrategy ? "Cancel" : "Edit Strategy"}
+              </Btn>
+            </div>
+            
+            {/* Current Strategy Display */}
+            {!editingStrategy && (
+              <div>
+                <div style={{display:"flex", gap:8, flexWrap:"wrap", marginBottom:16}}>
+                  <Badge text={agent.strategyLabel || "Custom"} color={C.accent}/>
+                  <Badge text={agent.strategyClass?.toUpperCase() || "CUSTOM"} color={C.text}/>
+                  <Badge text={`RISK: ${agent.risk?.toUpperCase()}`} color={agent.risk === "low" ? C.ok : agent.risk === "medium" ? C.warn : C.danger}/>
+                </div>
+                <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12}}>
+                  {[
+                    ["ROI Target", `${agent.kpiTarget || 12}%`],
+                    ["Capital / Cycle", `${agent.capitalLimit || 5000} KAS`],
+                    ["Horizon", `${agent.horizon || 30} days`],
+                    ["Auto-Approve ≤", `${agent.autoApproveThreshold || 50} KAS`],
+                  ].map(([k,v])=>(
+                    <div key={k as any} style={{background:C.s2, padding:"10px 14px", borderRadius:6}}>
+                      <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>{k}</div>
+                      <div style={{fontSize:14, color:C.text, fontWeight:600, ...mono}}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Edit Mode */}
+            {editingStrategy && (
+              <div>
+                <div style={{fontSize:11, color:C.dim, ...mono, marginBottom:10}}>SELECT STRATEGY PRESET</div>
+                <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:8, marginBottom:16}}>
+                  {allStrategies.map((strategy: any) => {
+                    const isSelected = editForm.strategyTemplate === strategy.id;
+                    return (
+                      <div 
+                        key={strategy.id}
+                        onClick={()=>handleStrategySelect(strategy)}
+                        style={{
+                          padding:"12px 14px", 
+                          borderRadius:6, 
+                          cursor:"pointer", 
+                          border:`1px solid ${isSelected ? C.accent : C.border}`,
+                          background:isSelected ? C.aLow : C.s2,
+                          transition:"all 0.15s"
+                        }}
+                      >
+                        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4}}>
+                          <span style={{fontSize:12, color:isSelected ? C.accent : C.text, fontWeight:600, ...mono}}>{strategy.name}</span>
+                          <Badge text={strategy.tag} color={strategy.tagColor || C.purple} size="sm"/>
+                        </div>
+                        <div style={{fontSize:10, color:C.dim}}>{strategy.purpose?.slice(0, 60)}...</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div style={{fontSize:11, color:C.dim, ...mono, marginBottom:10, marginTop:16}}>CONFIGURE PARAMETERS</div>
+                <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:16}}>
+                  <Inp 
+                    label="ROI Target" 
+                    value={editForm.kpiTarget} 
+                    onChange={(v: string)=>setEditForm({...editForm, kpiTarget: v})} 
+                    type="number" 
+                    suffix="%"
+                  />
+                  <Inp 
+                    label="Capital / Cycle" 
+                    value={editForm.capitalLimit} 
+                    onChange={(v: string)=>setEditForm({...editForm, capitalLimit: v})} 
+                    type="number" 
+                    suffix="KAS"
+                  />
+                  <Inp 
+                    label="Horizon (days)" 
+                    value={editForm.horizon} 
+                    onChange={(v: string)=>setEditForm({...editForm, horizon: Number(v)})} 
+                    type="number"
+                  />
+                  <Inp 
+                    label="Auto-Approve ≤" 
+                    value={editForm.autoApproveThreshold} 
+                    onChange={(v: string)=>setEditForm({...editForm, autoApproveThreshold: v})} 
+                    type="number" 
+                    suffix="KAS"
+                  />
+                </div>
+                
+                <div style={{fontSize:11, color:C.dim, ...mono, marginBottom:10}}>RISK TOLERANCE</div>
+                <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:16}}>
+                  {RISK_OPTS.map(r=>{const on = editForm.risk === r.v; return (
+                    <div 
+                      key={r.v} 
+                      onClick={()=>setEditForm({...editForm, risk: r.v})}
+                      style={{
+                        padding:"12px 10px", 
+                        borderRadius:4, 
+                        cursor:"pointer", 
+                        border:`1px solid ${on?C.accent:C.border}`, 
+                        background:on?C.aLow:C.s2, 
+                        textAlign:"center", 
+                        transition:"all 0.15s"
+                      }}
+                    >
+                      <div style={{fontSize:12, color:on?C.accent:C.text, fontWeight:600, ...mono}}>{r.l}</div>
+                    </div>
+                  );})}
+                </div>
+                
+                <div style={{fontSize:11, color:C.dim, ...mono, marginBottom:10}}>EXECUTION MODE</div>
+                <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:16}}>
+                  {EXEC_OPTS.map(r=>{const on = editForm.execMode === r.v; return (
+                    <div 
+                      key={r.v} 
+                      onClick={()=>setEditForm({...editForm, execMode: r.v})}
+                      style={{
+                        padding:"12px 10px", 
+                        borderRadius:4, 
+                        cursor:"pointer", 
+                        border:`1px solid ${on?C.accent:C.border}`, 
+                        background:on?C.aLow:C.s2, 
+                        textAlign:"center", 
+                        transition:"all 0.15s"
+                      }}
+                    >
+                      <div style={{fontSize:11, color:on?C.accent:C.text, fontWeight:600, ...mono}}>{r.l}</div>
+                    </div>
+                  );})}
+                </div>
+                
+                <div style={{display:"flex", gap:10, justifyContent:"flex-end"}}>
+                  <Btn onClick={()=>setEditingStrategy(false)} variant="ghost">Cancel</Btn>
+                  <Btn onClick={handleSaveStrategy}>Save Changes</Btn>
+                </div>
+              </div>
+            )}
+          </Card>
+          
+          {/* Execution Mode Card */}
           <Card p={18}>
             <Label>Execution Mode</Label>
             {EXEC_OPTS.map(m=>{const on=execMode===m.v; return(
