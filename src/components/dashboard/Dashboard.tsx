@@ -919,6 +919,21 @@ const [viewportWidth, setViewportWidth] = useState(
         </div>
       </div>
 
+      <DashboardMissionControlBadges
+        networkLabel={NETWORK_LABEL}
+        status={status}
+        execMode={execMode}
+        liveExecutionArmed={liveExecutionArmed}
+        autoCycleCountdownLabel={autoCycleCountdownLabel}
+        lastDecisionSource={lastDecisionSource}
+        usage={usage}
+        executionGuardrails={executionGuardrails}
+        receiptConsistencyMetrics={receiptConsistencyMetrics}
+        isAccumulateOnly={ACCUMULATE_ONLY}
+        walletProvider={wallet?.provider || ""}
+        quantClientMode={quantClientMode}
+      />
+
       <DashboardRuntimeNotices kasDataError={kasDataError} refreshKasData={refreshKasData} kasDataLoading={kasDataLoading} liveExecutionArmed={liveExecutionArmed} liveExecutionReady={liveExecutionReady} executionGuardrails={executionGuardrails} pendingCount={pendingCount} isMobile={isMobile} setTab={setTab} />
 
       {/* Tabs */}
