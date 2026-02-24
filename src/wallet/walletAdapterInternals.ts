@@ -10,10 +10,10 @@ import { isAddressPrefixCompatible, resolveKaspaNetwork } from "../kaspa/network
 import { walletError } from "../runtime/errorTaxonomy";
 
 export const ALL_KASPA_ADDRESS_PREFIXES = ["kaspa", "kaspatest", "kaspadev", "kaspasim"];
-export const WALLET_CALL_TIMEOUT_MS = 15000;
-export const WALLET_SEND_TIMEOUT_MS = 45000;
-export const GHOST_PROVIDER_SCAN_TIMEOUT_MS = 350;
-export const GHOST_CONNECT_TIMEOUT_MS = 45000;
+export const WALLET_CALL_TIMEOUT_MS = 10000;   // reduced: faster failure detection
+export const WALLET_SEND_TIMEOUT_MS = 30000;   // reduced: 30 s for tx broadcast
+export const GHOST_PROVIDER_SCAN_TIMEOUT_MS = 250;
+export const GHOST_CONNECT_TIMEOUT_MS = 30000;
 export const KASTLE_RAW_TX_ENABLED = String((import.meta as any)?.env?.VITE_KASTLE_RAW_TX_ENABLED || "false").toLowerCase() === "true";
 export const KASTLE_RAW_TX_MANUAL_JSON_PROMPT_ENABLED =
   String((import.meta as any)?.env?.VITE_KASTLE_RAW_TX_MANUAL_JSON_PROMPT_ENABLED || "true").toLowerCase() !== "false";

@@ -16,6 +16,9 @@ export type PortfolioAgentInput = {
   strategyClass?: string;
   attributionSummary?: any;
   lastDecision?: any;
+  balanceKas?: number;
+  pnlKas?: number;
+  pnlMode?: "estimated" | "hybrid" | "realized";
 };
 
 export type PortfolioAllocatorConfigLike = {
@@ -50,6 +53,12 @@ export type PortfolioAllocationRow = {
   dataQuality: number;
   rebalanceDeltaKas: number;
   notes: string[];
+  // Per-agent balance and PnL
+  balanceKas: number;
+  pnlKas: number;
+  pnlMode: "estimated" | "hybrid" | "realized";
+  realizedPnlKas: number;
+  estimatedPnlKas: number;
 };
 
 export type PortfolioAllocationSummary = {
@@ -242,6 +251,16 @@ export function computeSharedRiskBudgetAllocation(params: {
     const calibrationRouting = deriveCalibrationRouting(agent?.attributionSummary);
     const templateRegimeBoost = strategyTemplateRegimeMultiplier(strategyTemplate, strategyClass, regime);
 
+    // Extract PnL from attribution summary
+    const attribution = agent?.attributionSummary;
+    const pnlMode = String(attribution?.netPnlMode || "estimated") as "estimated" | "hybrid" | "realized";
+    const pnlKas = n(attribution?.netPnlKas, 0);
+    const realizedPnlKas = n(attribution?.netPnlKas, 0); // Use netPnlKas as realized when confirmed
+    const estimatedPnlKas = n(attribution?.estimatedNetPnlKas || attribution?.netPnlKas, 0);
+    
+    // Calculate balance from budget + pending - this represents the agent's allocated capital
+    const balanceKas = n(agent?.balanceKas, 0) || n(agent?.capitalLimitKas, 0);
+
     const baseTargetWeight = targetPct > 0 ? targetPct / 100 : 0;
     const signalStrength = clamp(0.25 + confidence * 0.45 + Math.max(0, riskHeadroom) * 0.2 + dataQuality * 0.1, 0.05, 1.1);
     const queuePenalty = clamp(1 - queuePressurePct / 160, 0.2, 1);
@@ -277,6 +296,12 @@ export function computeSharedRiskBudgetAllocation(params: {
       calibrationRouting,
       score,
       queuePressurePct,
+      // PnL data
+      balanceKas,
+      pnlKas,
+      pnlMode,
+      realizedPnlKas,
+      estimatedPnlKas,
     };
   });
 
@@ -351,6 +376,12 @@ export function computeSharedRiskBudgetAllocation(params: {
             : []
         )
         .slice(0, 5),
+      // Per-agent balance and PnL
+      balanceKas: Number(row.balanceKas.toFixed(6)),
+      pnlKas: Number(row.pnlKas.toFixed(6)),
+      pnlMode: row.pnlMode,
+      realizedPnlKas: Number(row.realizedPnlKas.toFixed(6)),
+      estimatedPnlKas: Number(row.estimatedPnlKas.toFixed(6)),
     };
   });
 

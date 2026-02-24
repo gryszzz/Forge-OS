@@ -14,18 +14,26 @@ export default function ForgeOS() {
   const [view, setView] = useState("create");
   const [agents, setAgents] = useState([] as any[]);
   const [activeAgentId, setActiveAgentId] = useState("");
+  const [editingAgent, setEditingAgent] = useState<any>(null);
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1280
   );
 
-  const handleConnect = (session: any) => { setWallet(session); };
+  const handleConnect = (session: any) => { 
+    setWallet(session); 
+    // Go to dashboard after connecting, not directly to wizard
+    setView("dashboard");
+  };
   const handleDeploy = (a: any) => {
     setAgents((prev: any[]) => {
-      const next = [...prev.filter((item) => item?.agentId !== a?.agentId), a];
+      // If updating existing agent, replace it; otherwise add new
+      const filtered = prev.filter((item) => item?.agentId !== a?.agentId);
+      const next = [...filtered, a];
       return next.slice(-24);
     });
     setActiveAgentId(String(a?.agentId || ""));
+    setEditingAgent(null);
     setView("dashboard");
   };
   const activeAgent = useMemo(
@@ -145,14 +153,49 @@ export default function ForgeOS() {
           <Btn onClick={()=>{setWallet(null); setAgents([]); setActiveAgentId(""); setView("create");}} variant="ghost" size="sm">DISCONNECT</Btn>
         </div>
       </div>
-      {view==="create" || !activeAgent ? (
-        <Wizard wallet={wallet} onComplete={handleDeploy}/>
+      {view === "create" ? (
+        <Wizard wallet={wallet} onComplete={handleDeploy} editAgent={editingAgent} onCancel={() => { setEditingAgent(null); setView("dashboard"); }}/>
+      ) : !activeAgent && agents.length === 0 ? (
+        // No agents yet - show dashboard with empty state (user can create via "NEW AGENT")
+        <Dashboard
+          agent={{
+            name: "",
+            agentId: "",
+            capitalLimit: "0",
+            risk: "",
+            strategyLabel: "",
+            strategyTemplate: "",
+            strategyClass: "",
+            horizon: 0,
+            kpiTarget: "",
+            autoApproveThreshold: "",
+            execMode: "manual"
+          }}
+          agents={[]}
+          activeAgentId=""
+          onSelectAgent={() => {}}
+          onDeleteAgent={() => {}}
+          onEditAgent={() => {}}
+          wallet={wallet}
+        />
       ) : (
         <Dashboard
           agent={activeAgent}
           agents={agents}
           activeAgentId={activeAgentId}
           onSelectAgent={(id: string) => { setActiveAgentId(id); setView("dashboard"); }}
+          onDeleteAgent={(id: string) => {
+            setAgents((prev: any[]) => prev.filter((a) => String(a?.agentId) !== String(id)));
+            if (String(activeAgentId) === String(id)) {
+              setActiveAgentId("");
+              setView("create");
+            }
+          }}
+          onEditAgent={(agent: any) => {
+            setEditingAgent(agent);
+            setActiveAgentId(String(agent?.agentId || ""));
+            setView("create");
+          }}
           wallet={wallet}
         />
       )}

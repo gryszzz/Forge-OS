@@ -30,7 +30,7 @@ export const WStep1 = ({d, set, wallet}: any) => {
     <div style={{fontSize:17, color:C.text, fontWeight:700, marginBottom:3, ...mono}}>Configure Agent</div>
     <div style={{fontSize:12, color:C.dim, marginBottom:20}}>Connected: <span style={{color:C.accent, ...mono}}>{shortAddr(wallet?.address)}</span></div>
     <Label>Strategy Profile (Self-Trading Bot, Accumulation-First)</Label>
-    <div style={{display:"grid", gridTemplateColumns:"1fr", gap:8, marginBottom:16}}>
+    <div style={{display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10, marginBottom:16}}>
       {STRATEGY_TEMPLATES.map((tpl) => {
         const on = d.strategyTemplate === tpl.id;
         return (
@@ -43,16 +43,17 @@ export const WStep1 = ({d, set, wallet}: any) => {
               Object.entries(tpl.defaults).forEach(([k, v]) => set(k, v));
             }}
             style={{
-              padding:"10px 12px",
-              borderRadius:8,
+              padding:"16px 18px",
+              borderRadius:10,
               cursor:"pointer",
-              border:`1px solid ${on ? C.accent : C.border}`,
-              background:on ? C.aLow : C.s2,
-              transition:"all 0.15s",
+              border:`2px solid ${on ? C.accent : C.border}`,
+              background:on ? `${C.accent}15` : C.s2,
+              transition:"all 0.2s",
+              boxShadow: on ? `0 4px 12px ${C.accent}30` : "none"
             }}
           >
-            <div style={{display:"flex", justifyContent:"space-between", gap:8, alignItems:"center", marginBottom:4}}>
-              <div style={{fontSize:12, color:on?C.accent:C.text, fontWeight:700, ...mono}}>{tpl.name}</div>
+            <div style={{display:"flex", justifyContent:"space-between", gap:8, alignItems:"center", marginBottom:8}}>
+              <div style={{fontSize:14, color:on?C.accent:C.text, fontWeight:700, ...mono}}>{tpl.name}</div>
               <Badge text={tpl.tag} color={tpl.tagColor || C.ok}/>
             </div>
             <div style={{fontSize:11, color:C.text, marginBottom:3}}>{tpl.purpose || tpl.desc}</div>

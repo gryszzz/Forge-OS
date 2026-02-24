@@ -1,9 +1,10 @@
 import { makeForgeError } from "./errorTaxonomy";
 
-export type AgentLifecycleState = "RUNNING" | "PAUSED" | "SUSPENDED" | "ERROR";
+export type AgentLifecycleState = "OFF" | "RUNNING" | "PAUSED" | "SUSPENDED" | "ERROR";
 export type AgentLifecycleEvent =
   | { type: "PAUSE" }
   | { type: "RESUME" }
+  | { type: "START" }
   | { type: "KILL" }
   | { type: "FAIL"; reason?: string }
   | { type: "RESET_ERROR" };
@@ -34,6 +35,9 @@ export type QueueTxReceiptLifecycleEvent =
 
 export function transitionAgentLifecycle(state: AgentLifecycleState, event: AgentLifecycleEvent): AgentLifecycleState {
   switch (state) {
+    case "OFF":
+      if (event.type === "START") return "RUNNING";
+      return state;
     case "RUNNING":
       if (event.type === "PAUSE") return "PAUSED";
       if (event.type === "KILL") return "SUSPENDED";

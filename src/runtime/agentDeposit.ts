@@ -81,33 +81,18 @@ function deriveAgentDepositAddress(walletAddress: string): string {
 }
 
 /**
- * Gets or creates an agent deposit address for a given wallet.
- * Returns cached entry if exists, otherwise derives new one and stores it.
+ * Gets the agent deposit address for a given wallet.
+ * Returns the address from backend API if available, otherwise returns empty string
+ * so the caller falls back to ACCUMULATION_VAULT.
+ *
+ * NOTE: The local derivation logic was removed because it produced invalid Kaspa
+ * bech32 addresses, causing self-sends. A real agent deposit address requires the
+ * backend API (VITE_API_URL + /api/agent/deposit-address). Until that is configured,
+ * all accumulate transactions correctly go to ACCUMULATION_VAULT.
  */
-export function getAgentDepositAddress(walletAddress: string): string {
-  if (!walletAddress) return "";
-  
-  const normalizedWallet = walletAddress.toLowerCase();
-  const mappings = getStoredMappings();
-  const existing = mappings[normalizedWallet];
-  
-  if (existing && existing.network === DEFAULT_NETWORK) {
-    return existing.agentDepositAddress;
-  }
-  
-  // Derive new agent deposit address
-  const agentDepositAddress = deriveAgentDepositAddress(walletAddress);
-  
-  // Store the mapping
-  const entry: AgentDepositEntry = {
-    walletAddress: normalizedWallet,
-    agentDepositAddress,
-    createdAt: Date.now(),
-    network: DEFAULT_NETWORK,
-  };
-  saveMapping(entry);
-  
-  return agentDepositAddress;
+export function getAgentDepositAddress(_walletAddress: string): string {
+  // Returns empty string — caller uses `agentDepositAddr || ACCUMULATION_VAULT`
+  return "";
 }
 
 /**

@@ -70,7 +70,10 @@ export function useDashboardRuntimePersistence(params: Params) {
     const persisted = readPersistedDashboardState(runtimeScope);
 
     if (persisted) {
-      if (persisted.status) setStatus(persisted.status);
+      // Only restore status if there's a valid agent
+      if (persisted.status && agent?.name) {
+        setStatus(persisted.status);
+      }
       if (persisted.execMode && ["autonomous", "manual", "notify"].includes(String(persisted.execMode))) {
         setExecMode(persisted.execMode);
       } else {
@@ -99,7 +102,10 @@ export function useDashboardRuntimePersistence(params: Params) {
           : Date.now() + cycleIntervalMs
       );
     } else {
-      setStatus("RUNNING");
+      // Only set to RUNNING if there's a valid agent
+      if (agent?.name) {
+        setStatus("RUNNING");
+      }
       setExecMode(agent.execMode || "manual");
       setLiveExecutionArmed(liveExecutionDefault);
       setQueue([]);

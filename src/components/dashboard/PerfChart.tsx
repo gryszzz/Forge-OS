@@ -36,7 +36,7 @@ export function PerfChart({decisions, kpiTarget}: any) {
     <Card p={18}>
       <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10}}>
         <div>
-          <Label>Simulated Performance — Agent ROI</Label>
+          <Label>Performance — Agent ROI</Label>
           <span style={{fontSize:24, color:latest.roi>=0?C.ok:C.danger, fontWeight:700, ...mono}}>{latest.roi>=0?"+":""}{latest.roi}%</span>
           <span style={{fontSize:12, color:C.dim, marginLeft:10}}>target {tgt}%</span>
         </div>

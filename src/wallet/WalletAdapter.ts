@@ -1,7 +1,7 @@
-import { createGhostProvider } from "./providers/ghost";
 import { createHardwareBridgeProvider } from "./providers/hardwareBridge";
 import { createKaspiumProvider } from "./providers/kaspium";
 import { createKastleProvider } from "./providers/kastle";
+import { createGhostProvider } from "./providers/ghost";
 import { createKaswareProvider } from "./providers/kasware";
 import {
   ALLOWED_ADDRESS_PREFIXES,
@@ -9,7 +9,6 @@ import {
   DEFAULT_NETWORK,
   ENFORCE_WALLET_NETWORK,
   GHOST_CONNECT_TIMEOUT_MS,
-  GHOST_PROVIDER_SCAN_TIMEOUT_MS,
   KASPIUM_DEEP_LINK_SCHEME,
   KASTLE_RAW_TX_ENABLED,
   KASTLE_RAW_TX_MANUAL_JSON_PROMPT_ENABLED,
@@ -66,7 +65,6 @@ const kastleProvider = createKastleProvider({
   withTimeout,
   WALLET_CALL_TIMEOUT_MS,
   WALLET_SEND_TIMEOUT_MS,
-  KASTLE_CONNECT_TIMEOUT_MS: GHOST_CONNECT_TIMEOUT_MS,
   resolveKaspaNetwork,
   DEFAULT_NETWORK,
   normalizeKaspaAddress,
@@ -90,6 +88,22 @@ const kastleProvider = createKastleProvider({
   getKastleCachedAccountAddress,
 });
 
+const kaspiumProvider = createKaspiumProvider({
+  normalizeKaspaAddress,
+  ALLOWED_ADDRESS_PREFIXES,
+  DEFAULT_NETWORK,
+  KASPIUM_DEEP_LINK_SCHEME,
+  isLikelyTxid,
+});
+
+const hardwareBridgeProvider = createHardwareBridgeProvider({
+  normalizeKaspaAddress,
+  ALLOWED_ADDRESS_PREFIXES,
+  DEFAULT_NETWORK,
+  normalizeOutputList,
+  isLikelyTxid,
+});
+
 const ghostProvider = createGhostProvider({
   resolveKaspaNetwork,
   DEFAULT_NETWORK,
@@ -109,22 +123,6 @@ const ghostProvider = createGhostProvider({
   parseAnyTxid,
   promptForTxidIfNeeded,
   normalizeOutputList,
-});
-
-const kaspiumProvider = createKaspiumProvider({
-  normalizeKaspaAddress,
-  ALLOWED_ADDRESS_PREFIXES,
-  DEFAULT_NETWORK,
-  KASPIUM_DEEP_LINK_SCHEME,
-  isLikelyTxid,
-});
-
-const hardwareBridgeProvider = createHardwareBridgeProvider({
-  normalizeKaspaAddress,
-  ALLOWED_ADDRESS_PREFIXES,
-  DEFAULT_NETWORK,
-  normalizeOutputList,
-  isLikelyTxid,
 });
 
 export const WalletAdapter = {
@@ -165,20 +163,12 @@ export const WalletAdapter = {
     };
   },
 
-  async probeGhostProviders(timeoutMs?: number) {
-    return ghostProvider.probeProviders(timeoutMs ?? GHOST_PROVIDER_SCAN_TIMEOUT_MS);
-  },
-
   async connectKasware() {
     return kaswareProvider.connect();
   },
 
   async connectKastle() {
     return kastleProvider.connect();
-  },
-
-  async connectGhost() {
-    return ghostProvider.connect();
   },
 
   connectKaspium(address: string) {
@@ -209,16 +199,16 @@ export const WalletAdapter = {
     return kastleProvider.sendRawTx(outputs, purpose);
   },
 
+  async sendKaspium(toAddress: string, amountKas: number, note?: string) {
+    return kaspiumProvider.send(toAddress, amountKas, note);
+  },
+
   async sendGhost(toAddress: string, amountKas: number) {
     return ghostProvider.send(toAddress, amountKas);
   },
 
   async sendGhostOutputs(outputs: Array<{ to: string; amount_kas: number }>, purpose?: string) {
     return ghostProvider.sendOutputs(outputs, purpose);
-  },
-
-  async sendKaspium(toAddress: string, amountKas: number, note?: string) {
-    return kaspiumProvider.send(toAddress, amountKas, note);
   },
 
   async signMessageKasware(message: string) {
@@ -231,7 +221,6 @@ export const WalletAdapter = {
 
   supportsNativeMultiOutput(provider: string) {
     const normalized = String(provider || "").toLowerCase();
-    if (normalized === "ghost") return true;
     if (normalized === "kastle") return kastleProvider.canMultiOutputRawTxPath();
     return false;
   },

@@ -61,9 +61,9 @@ const PnlAttributionPanel = lazy(() =>
 const AlertsPanel = lazy(() => import("./AlertsPanel").then((m) => ({ default: m.AlertsPanel })));
 const QuantAnalyticsPanel = lazy(() => import("./QuantAnalyticsPanel").then((m) => ({ default: m.QuantAnalyticsPanel })));
 
-export function Dashboard({agent, wallet, agents = [], activeAgentId, onSelectAgent}: any) {
-  const LIVE_POLL_MS = 5000;
-  const STREAM_RECONNECT_MAX_DELAY_MS = 12000;
+export function Dashboard({agent, wallet, agents = [], activeAgentId, onSelectAgent, onDeleteAgent, onEditAgent}: any) {
+  const LIVE_POLL_MS = 2000;           // 2 s – faster wallet-balance refresh
+  const STREAM_RECONNECT_MAX_DELAY_MS = 8000;
   const RECEIPT_RETRY_BASE_MS = 2000;
   const RECEIPT_RETRY_MAX_MS = 30000;
   const RECEIPT_TIMEOUT_MS = 8 * 60 * 1000;
@@ -83,14 +83,40 @@ export function Dashboard({agent, wallet, agents = [], activeAgentId, onSelectAg
   const lastRegimeRef = useRef("");
   const [runtimeHydrated, setRuntimeHydrated] = useState(false);
   const [tab, setTab] = useState("overview");
-  const { status, setStatus, transitionAgentStatus } = useAgentLifecycle("RUNNING");
+  // Helper to read persisted state from localStorage
+  const readPersistedState = (scope: string) => {
+    if (typeof window === "undefined") return null;
+    try {
+      const key = `forgeos_dashboard_${scope}`;
+      const stored = window.localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Get persisted values if available
+  const persistedState = runtimeScope ? readPersistedState(runtimeScope) : null;
+  
+  const { status, setStatus, transitionAgentStatus } = useAgentLifecycle(
+    persistedState?.status || (agent?.name ? "RUNNING" : "PAUSED")
+  );
   const [log, setLog] = useState(()=>seedLog(agent.name));
   const [decisions, setDecisions] = useState([] as any[]);
   const [loading, setLoading] = useState(false);
-  const [execMode, setExecMode] = useState(agent.execMode || "manual");
+  // Get persisted execMode value if available (validate it's a valid option)
+  const validExecModes = ["autonomous", "manual", "notify"];
+  const initialExecMode = persistedState?.execMode && validExecModes.includes(persistedState.execMode)
+    ? persistedState.execMode
+    : (agent.execMode || "manual");
+  const [execMode, setExecMode] = useState(initialExecMode);
   const [autoThresh] = useState(parseFloat(agent.autoApproveThreshold) || 50);
   const [usage, setUsage] = useState(() => getUsageState(FREE_CYCLES_PER_DAY, usageScope));
-  const [liveExecutionArmed, setLiveExecutionArmed] = useState(LIVE_EXECUTION_DEFAULT);
+  // Get persisted liveExecutionArmed value if available
+  const initialLiveExecutionArmed = persistedState?.liveExecutionArmed !== undefined 
+    ? persistedState.liveExecutionArmed 
+    : LIVE_EXECUTION_DEFAULT;
+  const [liveExecutionArmed, setLiveExecutionArmed] = useState(initialLiveExecutionArmed);
   const [nextAutoCycleAt, setNextAutoCycleAt] = useState(() => Date.now() + cycleIntervalMs);
 const [viewportWidth, setViewportWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1200
@@ -240,7 +266,7 @@ const [viewportWidth, setViewportWidth] = useState(
     if (tab === "billing") setTab("treasury");
   }, [tab]);
 
-  const riskThresh = agent.risk==="low"?0.4:agent.risk==="medium"?0.65:0.85;
+  const riskThresh = agent?.risk==="low"?0.4:agent?.risk==="medium"?0.65:0.85;
   const allAgents = useMemo(() => {
     const source = Array.isArray(agents) && agents.length > 0 ? agents : [agent];
     const deduped = new Map<string, any>();
@@ -444,6 +470,15 @@ const [viewportWidth, setViewportWidth] = useState(
           addLog({
             type:"EXEC",
             msg:`Signal generated (${dec.action}) but no transaction broadcast because ${reason}.`,
+            fee:0.01,
+          });
+        } else if(dec.action === "REDUCE"){
+          // REDUCE = take-profit signal. Kaspa is the asset being accumulated — to realise
+          // profit the user must manually transfer KAS from their accumulation vault to an
+          // exchange.  No automated on-chain transaction is generated here.
+          addLog({
+            type:"EXEC",
+            msg:`REDUCE signal — take-profit opportunity. Move KAS from your accumulation address to an exchange to realise gains. Agent will hold accumulation until signal clears.`,
             fee:0.01,
           });
         } else if(dec.action!=="HOLD"){
@@ -680,12 +715,12 @@ const [viewportWidth, setViewportWidth] = useState(
   const TABS = [
     {k:"overview",l:"OVERVIEW"},
     {k:"portfolio",l:"PORTFOLIO"},
+    {k:"wallet",l:"WALLET"},
     {k:"intelligence",l:"INTELLIGENCE"},
     {k:"analytics",l:"ANALYTICS"},
     {k:"attribution",l:"ATTRIBUTION"},
     {k:"alerts",l:"ALERTS"},
     {k:"queue",l:`QUEUE${pendingCount>0?` (${pendingCount})`:""}`},
-    {k:"wallet",l:"WALLET"},
     {k:"log",l:"LOG"},
     {k:"controls",l:"CONTROLS"},
   ];
@@ -862,15 +897,25 @@ const [viewportWidth, setViewportWidth] = useState(
           <div style={{fontSize:18, color:C.text, fontWeight:700, ...mono}}>{agent.name}</div>
         </div>
         <div style={{display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", justifyContent:isMobile ? "flex-start" : "flex-end"}}>
-          <Badge text={status} color={status==="RUNNING"?C.ok:status==="PAUSED"?C.warn:C.danger} dot/>
-          <Badge text={execMode.toUpperCase()} color={C.accent}/>
-          <Badge text={String(activeStrategyLabel).toUpperCase()} color={C.text}/>
-          <Badge text={liveExecutionArmed ? "LIVE EXEC ON" : "LIVE EXEC OFF"} color={liveExecutionArmed ? C.ok : C.warn} dot/>
-          <Badge text={ACCUMULATE_ONLY ? "ACCUMULATE-ONLY" : "MULTI-ACTION"} color={ACCUMULATE_ONLY ? C.ok : C.warn}/>
-          <Badge text={wallet?.provider?.toUpperCase()||"WALLET"} color={C.purple} dot/>
-          <Badge text={`ENGINE ${String(quantClientMode).toUpperCase()}`} color={quantClientMode === "worker" ? C.ok : C.warn}/>
-          <Badge text={liveConnected?"DAG LIVE":"DAG OFFLINE"} color={liveConnected?C.ok:C.danger} dot/>
-          <Badge text={streamBadgeText} color={streamBadgeColor} dot/>
+          {/* Status: show only when not default-paused */}
+          {(status && status !== "PAUSED") && <Badge text={status} color={status==="RUNNING"?C.ok:status==="PAUSED"?C.warn:C.dim} dot/>}
+          {/* AUTONOMOUS — only when autonomous mode is active (hide when manual/notify) */}
+          {execMode === "autonomous" && <Badge text="AUTONOMOUS" color={C.accent}/>}
+          {/* Show non-autonomous exec modes more subtly */}
+          {execMode && execMode !== "autonomous" && <Badge text={execMode.toUpperCase()} color={C.dim}/>}
+          {/* Strategy label */}
+          {activeStrategyLabel && activeStrategyLabel !== "Custom" && <Badge text={String(activeStrategyLabel).toUpperCase()} color={C.text}/>}
+          {/* LIVE EXEC ON — only when armed */}
+          {liveExecutionArmed === true && <Badge text="LIVE EXEC ON" color={C.ok} dot/>}
+          {/* ACCUMULATE-ONLY — only when env flag is on */}
+          {ACCUMULATE_ONLY && <Badge text="ACCUMULATE-ONLY" color={C.ok}/>}
+          {/* Wallet provider (e.g. KASWARE) — always show when connected */}
+          {wallet?.provider && <Badge text={wallet?.provider?.toUpperCase()} color={C.purple} dot/>}
+          {/* ENGINE WORKER — only when quant engine is in worker mode */}
+          {quantClientMode === "worker" && <Badge text="ENGINE WORKER" color={C.ok}/>}
+          {/* Live feed badges */}
+          {liveConnected && <Badge text="DAG LIVE" color={C.ok} dot/>}
+          {streamConnected && streamBadgeText && <Badge text={streamBadgeText} color={streamBadgeColor} dot/>}
         </div>
       </div>
 
@@ -893,101 +938,324 @@ const [viewportWidth, setViewportWidth] = useState(
       {/* ── OVERVIEW ── */}
       {tab==="overview" && (
         <div>
+          {/* DeFi Header - Wallet Balance & Key Metrics */}
+          <Card p={0} style={{marginBottom:12, background: `linear-gradient(135deg, ${C.s2} 0%, ${C.s1} 100%)`, border: `1px solid ${C.accent}40`, boxShadow: `0 4px 24px ${C.accent}15`}}>
+            <div style={{padding: "18px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom: `1px solid ${C.border}`, background: `linear-gradient(90deg, ${C.accent}15 0%, transparent 100%)`}}>
+              <div style={{display:"flex", alignItems:"center", gap:14}}>
+                <div style={{width:52, height:52, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden"}}>
+                  <img src="/kas-icon.png" alt="KAS" width={56} height={56} style={{objectFit:"cover", marginTop:1}} />
+                </div>
+                <div style={{display:"flex", flexDirection:"column", justifyContent:"center"}}>
+                  <div style={{fontSize:10, color:C.accent, ...mono, marginBottom:1, letterSpacing:"0.15em", fontWeight:700}}>◆ TOTAL PORTFOLIO VALUE</div>
+                  <div style={{fontSize:36, color:C.accent, fontWeight:700, ...mono, textShadow: `0 0 30px ${C.accent}60`, lineHeight:1}}>
+                    {kasData?.walletKas || agent.capitalLimit} <span style={{fontSize:18, color:C.dim}}>KAS</span>
+                  </div>
+                  {Number(kasData?.priceUsd || 0) > 0 && (
+                    <div style={{fontSize:18, color:C.text, ...mono, display:"flex", alignItems:"center", gap:8}}>
+                      ${(Number(kasData?.walletKas || 0) * Number(kasData?.priceUsd)).toFixed(2)} 
+                      <span style={{color:C.ok, fontSize:12, background:C.ok + "20", padding:"2px 8px", borderRadius:4}}>USD</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{display:"flex", flexDirection:"column", gap:10, alignItems:"flex-end"}}>
+                <div style={{display:"flex", gap:10, alignItems:"center", background:`${C.s2}90`, padding:"10px 16px", borderRadius:10, border:`1px solid ${C.border}`}}>
+                  <div style={{display:"flex", alignItems:"center", gap:6}}>
+                    <span style={{fontSize:11, color:C.dim, ...mono}}>KAS/USD</span>
+                    <span style={{fontSize:18, color:C.text, fontWeight:700, ...mono}}>${Number(kasData?.priceUsd || 0).toFixed(4)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* Quick Stats Row - DeFi Style */}
+            <div style={{padding: "16px 24px", display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:16, background:`${C.border}15`}}>
+              <div style={{textAlign:"center", background:C.s2 + "60", padding:"12px 8px", borderRadius:8, border:`1px solid ${C.ok}30`}}>
+                <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:6, letterSpacing:"0.1em"}}>SPENDABLE</div>
+                <div style={{fontSize:18, color:C.ok, fontWeight:700, ...mono}}>{spendableKas.toFixed(2)}</div>
+                <div style={{fontSize:9, color:C.dim, ...mono}}>KAS</div>
+              </div>
+              <div style={{textAlign:"center", background:C.s2 + "60", padding:"12px 8px", borderRadius:8, border:`1px solid ${C.warn}30`}}>
+                <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:6, letterSpacing:"0.1em"}}>RESERVE</div>
+                <div style={{fontSize:18, color:C.warn, fontWeight:700, ...mono}}>{RESERVE}</div>
+                <div style={{fontSize:9, color:C.dim, ...mono}}>KAS</div>
+              </div>
+              <div style={{textAlign:"center", background:C.s2 + "60", padding:"12px 8px", borderRadius:8, border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:6, letterSpacing:"0.1em"}}>DAA HEIGHT</div>
+                <div style={{fontSize:18, color:C.text, fontWeight:700, ...mono}}>{kasData?.dag?.daaScore?.toLocaleString()?.slice(-6) || "—"}</div>
+                <div style={{fontSize:9, color:C.dim, ...mono}}>BLOCK</div>
+              </div>
+              <div style={{textAlign:"center", background:C.s2 + "60", padding:"12px 8px", borderRadius:8, border:`1px solid ${pendingCount > 0 ? C.warn : C.border}`}}>
+                <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:6, letterSpacing:"0.1em"}}>PENDING</div>
+                <div style={{fontSize:18, color:pendingCount > 0 ? C.warn : C.dim, fontWeight:700, ...mono}}>{pendingCount}</div>
+                <div style={{fontSize:9, color:C.dim, ...mono}}>TXS</div>
+              </div>
+              <div style={{textAlign:"center", background:C.s2 + "60", padding:"12px 8px", borderRadius:8, border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:6, letterSpacing:"0.1em"}}>FEES PAID</div>
+                <div style={{fontSize:18, color:C.text, fontWeight:700, ...mono}}>{totalFees.toFixed(3)}</div>
+                <div style={{fontSize:9, color:C.dim, ...mono}}>KAS</div>
+              </div>
+              <div style={{textAlign:"center", background:C.s2 + "60", padding:"12px 8px", borderRadius:8, border:`1px solid ${C.accent}30`}}>
+                <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:6, letterSpacing:"0.1em"}}>CYCLE SIZE</div>
+                <div style={{fontSize:18, color:C.accent, fontWeight:700, ...mono}}>{agent.capitalLimit}</div>
+                <div style={{fontSize:9, color:C.dim, ...mono}}>KAS</div>
+              </div>
+            </div>
+{/* Quick Actions Section */}
+            <div style={{padding: "14px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap", borderTop:`1px solid ${C.border}`}}>
+              <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
+                <Btn onClick={runCycle} disabled={loading||status!=="RUNNING"} size="sm">
+                  {loading ? "⏳" : "🚀"} {loading ? "RUNNING" : "RUN CYCLE"}
+                </Btn>
+                <Btn
+                  onClick={()=>setLiveExecutionArmed((v: boolean)=>!v)}
+                  variant={liveExecutionArmed ? "warn" : "primary"}
+                  size="sm"
+                >
+                  {liveExecutionArmed ? "🟢 AUTO-TRADE ON" : "🔴 AUTO-TRADE OFF"}
+                </Btn>
+                <Btn onClick={()=>transitionAgentStatus({ type: status==="RUNNING" ? "PAUSE" : "RESUME" })} variant="ghost" size="sm">
+                  {status==="RUNNING" ? "⏸ PAUSE" : "▶️ RESUME"}
+                </Btn>
+                <Btn onClick={killSwitch} variant="danger" size="sm">
+                  🛑 KILL
+                </Btn>
+              </div>
+              <div style={{display:"flex", alignItems:"center", gap:6}}>
+                <span style={{fontSize: 11, color: liveExecutionArmed ? C.ok : C.warn, fontWeight: 700, ...mono}}>
+                  {liveExecutionArmed ? "LIVE EXEC ON" : "LIVE EXEC OFF"}
+                </span>
+              </div>
+            </div>
+          </Card>
+          
           <div style={{display:"grid", gridTemplateColumns:summaryGridCols, gap:10, marginBottom:12}}>
             {[
-              {l:"Wallet Balance",    v:`${kasData?.walletKas||agent.capitalLimit} KAS`, s:shortAddr(wallet?.address),          c:C.accent},
-              {l:"DAA Score",         v:kasData?.dag?.daaScore?.toLocaleString()||"—",   s:"Kaspa DAG height",                  c:C.text},
-              {l:"Pending Signatures",v:pendingCount,                                    s:"In action queue",                   c:pendingCount>0?C.warn:C.dim},
-              {l:"Total Protocol Fees",v:`${totalFees} KAS`,                             s:`${(totalFees*TREASURY_SPLIT).toFixed(4)} KAS → treasury`, c:C.text},
+              {l:"Pending Signatures",v:pendingCount,s:"In action queue",c:pendingCount>0?C.warn:C.dim},
+              {l:"Total Protocol Fees",v:`${totalFees} KAS`,s:"", c:C.text},
+              {l:"Capital / Cycle",v:`${agent.capitalLimit} KAS`,s:"Per execution cycle",c:C.text},
+              {l:"Portfolio Cap",v:activePortfolioRow?.cycleCapKas ? `${activePortfolioRow.cycleCapKas} KAS` : "—",s:"Shared allocator",c:activePortfolioRow?.cycleCapKas ? C.ok : C.dim},
             ].map(r=> (
               <Card key={r.l} p={14}><Label>{r.l}</Label><div style={{fontSize:18, color:r.c, fontWeight:700, ...mono, marginBottom:2}}>{r.v}</div><div style={{fontSize:11, color:C.dim}}>{r.s}</div></Card>
             ))}
           </div>
           
-          {/* AI Trading Status - Prominent Live Activity Display */}
-          <Card p={0} style={{marginBottom:12, background: lastDecision ? `linear-gradient(135deg, ${C.s2} 0%, ${C.s1} 100%)` : C.s1, border: `1px solid ${lastDecision ? C.accent + '30' : C.border}`}}>
-            <div style={{padding: "16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom: `1px solid ${C.border}`}}>
-              <div style={{display:"flex", alignItems:"center", gap:10}}>
-                <div style={{width:10, height:10, borderRadius:"50%", background: status === "RUNNING" && lastDecision ? C.ok : status === "RUNNING" ? C.warn : C.danger, boxShadow: status === "RUNNING" && lastDecision ? `0 0 8px ${C.ok}` : 'none'}} />
-                <span style={{fontSize:13, color:C.text, fontWeight:700, ...mono}}>AI TRADING STATUS</span>
+          {/* AI Trading Status - Enhanced DeFi/Web3 Style */}
+          <Card p={0} style={{marginBottom:12, background: `linear-gradient(135deg, ${C.s2} 0%, ${lastDecision ? C.s1 : C.s2} 100%)`, border: `1px solid ${lastDecision ? C.accent + '40' : C.border}`, boxShadow: lastDecision ? `0 4px 24px ${C.accent}20` : 'none'}}>
+            {/* Header with animated status */}
+            <div style={{padding: "16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom: `1px solid ${C.border}`, background: `linear-gradient(90deg, ${C.accent}10 0%, transparent 100%)`}}>
+              <div style={{display:"flex", alignItems:"center", gap:12}}>
+                <span style={{fontSize:16}}>
+                  {status === "RUNNING" && lastDecision ? "🟢" : status === "RUNNING" ? "🟡" : status === "PAUSED" ? "🟡" : "⚫"}
+                </span>
+                <span style={{fontSize:14, color:C.text, fontWeight:700, ...mono}}>🤖 AI TRADING ENGINE</span>
               </div>
-              <div style={{display:"flex", gap:6}}>
+              <div style={{display:"flex", gap:8, alignItems:"center"}}>
+                <div style={{display:"flex", alignItems:"center", gap:6, background:`${C.s2}90`, padding:"6px 12px", borderRadius:20, border:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:12}}>⚡</span>
+                  <span style={{fontSize:11, color:C.dim, ...mono}}>Engine Latency</span>
+                  <span style={{fontSize:12, color:C.accent, fontWeight:700, ...mono}}>{lastDecision?.dec?.engine_latency_ms || 0}ms</span>
+                </div>
                 <Badge 
-                  text={status === "RUNNING" ? "AGENT ACTIVE" : status === "PAUSED" ? "PAUSED" : "STOPPED"} 
-                  color={status === "RUNNING" ? C.ok : status === "PAUSED" ? C.warn : C.danger}
-                  dot
+                  text={status === "RUNNING" ? "● ACTIVE" : status === "PAUSED" ? "◉ PAUSED" : "○ OFF"}
+                  color={status === "RUNNING" ? C.ok : status === "PAUSED" ? C.warn : C.dim}
                 />
                 <Badge 
-                  text={lastDecision?.action || "NO DECISIONS"} 
+                  text={lastDecision?.action || "WAITING"} 
                   color={lastDecision?.action === "ACCUMULATE" ? C.ok : lastDecision?.action === "REDUCE" ? C.danger : lastDecision?.action === "HOLD" ? C.warn : C.dim}
                 />
               </div>
             </div>
             
             {lastDecision ? (
-              <div style={{padding: "16px 20px"}}>
-                <div style={{display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap:12, marginBottom:12}}>
-                  <div>
-                    <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>Decision Source</div>
-                    <div style={{fontSize:14, color: lastDecisionSource === "hybrid-ai" ? C.accent : lastDecisionSource === "ai" ? C.ok : C.text, fontWeight:700, ...mono}}>
-                      {lastDecisionSource === "hybrid-ai" ? "🤖 AI + QUANT" : lastDecisionSource === "ai" ? "🤖 AI" : lastDecisionSource === "quant-core" ? "📊 QUANT" : "📊 FALLBACK"}
+              <div style={{padding: "20px"}}>
+                {/* Primary Metrics Row - Enhanced */}
+                <div style={{display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap:12, marginBottom:16}}>
+                  {/* Decision Source with Icon */}
+                  <div style={{background: `linear-gradient(135deg, ${C.s2} 0%, ${C.s1} 100%)`, borderRadius:10, padding:14, border:`1px solid ${lastDecisionSource === "hybrid-ai" ? C.accent + '40' : C.border}`}}>
+                    <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
+                      <span style={{fontSize:16}}>{lastDecisionSource === "hybrid-ai" ? "🧠" : lastDecisionSource === "ai" ? "🤖" : "📊"}</span>
+                      <div style={{fontSize:10, color:C.dim, ...mono, letterSpacing:"0.1em"}}>DECISION SOURCE</div>
+                    </div>
+                    <div style={{fontSize:18, color: lastDecisionSource === "hybrid-ai" ? C.accent : lastDecisionSource === "ai" ? C.ok : C.text, fontWeight:700, ...mono}}>
+                      {lastDecisionSource === "hybrid-ai" ? "HYBRID AI" : lastDecisionSource === "ai" ? "PURE AI" : lastDecisionSource === "quant-core" ? "QUANT CORE" : "FALLBACK"}
+                    </div>
+                    <div style={{fontSize:10, color:C.dim, marginTop:4}}>{lastDecisionSource === "hybrid-ai" ? "AI + Quant combined" : lastDecisionSource === "ai" ? "OpenAI powered" : "Local quant engine"}</div>
+                  </div>
+                  
+                  {/* Confidence Score - Circular Gauge Style */}
+                  <div style={{background: `linear-gradient(135deg, ${C.s2} 0%, ${C.s1} 100%)`, borderRadius:10, padding:14, border:`1px solid ${lastDecision.confidence_score >= 0.8 ? C.ok + '40' : lastDecision.confidence_score >= 0.5 ? C.warn + '40' : C.danger + '40'}`}}>
+                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8}}>
+                      <div style={{fontSize:10, color:C.dim, ...mono, letterSpacing:"0.1em"}}>CONFIDENCE</div>
+                      <span style={{fontSize:14}}>{lastDecision.confidence_score >= 0.8 ? "🟢" : lastDecision.confidence_score >= 0.5 ? "🟡" : "🔴"}</span>
+                    </div>
+                    <div style={{display:"flex", alignItems:"baseline", gap:4}}>
+                      <span style={{fontSize:28, color: lastDecision.confidence_score >= 0.8 ? C.ok : lastDecision.confidence_score >= 0.5 ? C.warn : C.danger, fontWeight:700, ...mono}}>
+                        {(lastDecision.confidence_score * 100).toFixed(0)}
+                      </span>
+                      <span style={{fontSize:14, color:C.dim, ...mono}}>%</span>
+                    </div>
+                    <div style={{marginTop:8, height:4, background:C.s1, borderRadius:2, overflow:"hidden"}}>
+                      <div style={{width: `${lastDecision.confidence_score * 100}%`, height:"100%", background: lastDecision.confidence_score >= 0.8 ? C.ok : lastDecision.confidence_score >= 0.5 ? C.warn : C.danger, borderRadius:2, transition:"width 0.5s ease"}} />
                     </div>
                   </div>
-                  <div>
-                    <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>Confidence</div>
-                    <div style={{fontSize:14, color: lastDecision.confidence_score >= 0.8 ? C.ok : lastDecision.confidence_score >= 0.5 ? C.warn : C.danger, fontWeight:700, ...mono}}>
-                      {(lastDecision.confidence_score * 100).toFixed(0)}%
+                  
+                  {/* Kelly Sizing */}
+                  <div style={{background: `linear-gradient(135deg, ${C.s2} 0%, ${C.s1} 100%)`, borderRadius:10, padding:14, border:`1px solid ${C.accent}40`}}>
+                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8}}>
+                      <div style={{fontSize:10, color:C.dim, ...mono, letterSpacing:"0.1em"}}>KELLY SIZING</div>
+                      <span style={{fontSize:14}}>📈</span>
+                    </div>
+                    <div style={{display:"flex", alignItems:"baseline", gap:4}}>
+                      <span style={{fontSize:28, color:C.accent, fontWeight:700, ...mono}}>
+                        {(lastDecision.kelly_fraction * 100).toFixed(1)}
+                      </span>
+                      <span style={{fontSize:14, color:C.dim, ...mono}}>%</span>
+                    </div>
+                    <div style={{fontSize:10, color:C.dim, marginTop:4}}>Position size multiplier</div>
+                  </div>
+                  
+                  {/* Monte Carlo Win */}
+                  <div style={{background: `linear-gradient(135deg, ${C.s2} 0%, ${C.s1} 100%)`, borderRadius:10, padding:14, border:`1px solid ${C.ok}40`}}>
+                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8}}>
+                      <div style={{fontSize:10, color:C.dim, ...mono, letterSpacing:"0.1em"}}>MONTE CARLO</div>
+                      <span style={{fontSize:14}}>🎯</span>
+                    </div>
+                    <div style={{display:"flex", alignItems:"baseline", gap:4}}>
+                      <span style={{fontSize:28, color:C.ok, fontWeight:700, ...mono}}>
+                        {lastDecision.monte_carlo_win_pct}
+                      </span>
+                      <span style={{fontSize:14, color:C.dim, ...mono}}>%</span>
+                    </div>
+                    <div style={{fontSize:10, color:C.dim, marginTop:4}}>Win probability</div>
+                  </div>
+                </div>
+                
+                {/* Quant Metrics Row - More Detail */}
+                {lastDecision.quant_metrics && (
+                  <div style={{background: C.s2, borderRadius:10, padding:16, marginBottom:16, border:`1px solid ${C.border}`}}>
+                    <div style={{fontSize:11, color:C.accent, fontWeight:700, ...mono, marginBottom:12, letterSpacing:"0.1em"}}>📊 QUANT CORE METRICS</div>
+                    <div style={{display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5, 1fr)", gap:12}}>
+                      <div>
+                        <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:4}}>SAMPLES</div>
+                        <div style={{fontSize:16, color:C.text, fontWeight:700, ...mono}}>{lastDecision.quant_metrics.sample_count ?? "—"}</div>
+                      </div>
+                      <div>
+                        <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:4}}>EDGE SCORE</div>
+                        <div style={{fontSize:16, color: Number(lastDecision.quant_metrics.edge_score) > 0 ? C.ok : C.warn, fontWeight:700, ...mono}}>{Number(lastDecision.quant_metrics.edge_score || 0).toFixed(4) ?? "—"}</div>
+                      </div>
+                      <div>
+                        <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:4}}>VOLATILITY</div>
+                        <div style={{fontSize:16, color:C.text, fontWeight:700, ...mono}}>{Number(lastDecision.quant_metrics.ewma_volatility || 0).toFixed(4) ?? "—"}</div>
+                      </div>
+                      <div>
+                        <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:4}}>DATA QUALITY</div>
+                        <div style={{fontSize:16, color: (lastDecision.quant_metrics.data_quality_score || 0) >= 0.7 ? C.ok : C.warn, fontWeight:700, ...mono}}>{((lastDecision.quant_metrics.data_quality_score || 0) * 100).toFixed(0)}%</div>
+                      </div>
+                      <div>
+                        <div style={{fontSize:9, color:C.dim, ...mono, marginBottom:4}}>REGIME</div>
+                        <div style={{fontSize:14, color: lastDecision.quant_metrics.regime === "RISK_ON" ? C.ok : lastDecision.quant_metrics.regime === "RISK_OFF" ? C.danger : C.warn, fontWeight:700, ...mono}}>
+                          {String(lastDecision.quant_metrics.regime || "NA").replace(/_/g, " ")}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>Kelly Sizing</div>
-                    <div style={{fontSize:14, color:C.accent, fontWeight:700, ...mono}}>
-                      {(lastDecision.kelly_fraction * 100).toFixed(1)}%
+                )}
+                
+                {/* Risk & Execution Row */}
+                <div style={{display:"flex", gap:12, marginBottom:16, flexWrap:"wrap"}}>
+                  <div style={{flex: "1 1 200px", background: C.s2, borderRadius:10, padding:14, border:`1px solid ${lastDecision.risk_score <= 0.4 ? C.ok + '40' : lastDecision.risk_score <= 0.7 ? C.warn + '40' : C.danger + '40'}`}}>
+                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                      <div style={{fontSize:10, color:C.dim, ...mono}}>RISK SCORE</div>
+                      <span style={{fontSize:14}}>{lastDecision.risk_score <= 0.4 ? "🛡️" : lastDecision.risk_score <= 0.7 ? "⚠️" : "🚨"}</span>
+                    </div>
+                    <div style={{fontSize:24, color: lastDecision.risk_score <= 0.4 ? C.ok : lastDecision.risk_score <= 0.7 ? C.warn : C.danger, fontWeight:700, ...mono}}>
+                      {lastDecision.risk_score?.toFixed(3)}
+                    </div>
+                    <div style={{fontSize:10, color:C.dim, marginTop:4}}>
+                      {lastDecision.risk_score <= 0.4 ? "Low risk - Safe to execute" : lastDecision.risk_score <= 0.7 ? "Medium risk - Caution advised" : "High risk - Blocked"}
                     </div>
                   </div>
-                  <div>
-                    <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>Monte Carlo Win</div>
-                    <div style={{fontSize:14, color:C.ok, fontWeight:700, ...mono}}>
-                      {lastDecision.monte_carlo_win_pct}%
+                  
+                  <div style={{flex: "1 1 200px", background: C.s2, borderRadius:10, padding:14, border:`1px solid ${C.accent}40`}}>
+                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                      <div style={{fontSize:10, color:C.dim, ...mono}}>CAPITAL ALLOCATION</div>
+                      <span style={{fontSize:14}}>💰</span>
+                    </div>
+                    <div style={{fontSize:24, color:C.accent, fontWeight:700, ...mono}}>
+                      {lastDecision.capital_allocation_kas} <span style={{fontSize:12, color:C.dim}}>KAS</span>
+                    </div>
+                    <div style={{fontSize:10, color:C.dim, marginTop:4}}>
+                      ~${(Number(lastDecision.capital_allocation_kas) * Number(kasData?.priceUsd || 0)).toFixed(2)} USD
+                    </div>
+                  </div>
+                  
+                  <div style={{flex: "1 1 200px", background: C.s2, borderRadius:10, padding:14, border:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                      <div style={{fontSize:10, color:C.dim, ...mono}}>NETWORK STATUS</div>
+                      <span style={{fontSize:14}}>{liveConnected ? "🟢" : "🔴"}</span>
+                    </div>
+                    <div style={{fontSize:18, color: liveConnected ? C.ok : C.danger, fontWeight:700, ...mono}}>
+                      {liveConnected ? "CONNECTED" : "OFFLINE"}
+                    </div>
+                    <div style={{fontSize:10, color:C.dim, marginTop:4}}>
+                      {kasData?.dag?.daaScore ? `DAA: ${kasData.dag.daaScore.toLocaleString()}` : "Waiting for sync"}
                     </div>
                   </div>
                 </div>
                 
-                {/* Mini Rationale */}
-                <div style={{background:C.s2, borderRadius:6, padding: "10px 14px", marginBottom:12}}>
-                  <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>LATEST AI RATIONALE</div>
-                  <div style={{fontSize:13, color:C.text, ...mono, lineHeight:1.5}}>
-                    {lastDecision.rationale?.slice(0, 200)}{lastDecision.rationale?.length > 200 ? "..." : ""}
+                {/* AI Rationale - Enhanced */}
+                <div style={{background: `linear-gradient(135deg, ${C.accent}08 0%, ${C.s2} 100%)`, borderRadius:10, padding:16, marginBottom:16, border:`1px solid ${C.accent}30`}}>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                    <div style={{display:"flex", alignItems:"center", gap:8}}>
+                      <span style={{fontSize:14}}>🧠</span>
+                      <div style={{fontSize:11, color:C.accent, fontWeight:700, ...mono, letterSpacing:"0.1em"}}>AI RATIONALE</div>
+                    </div>
+                    {lastDecision.quant_metrics?.ai_overlay_applied && (
+                      <Badge text="🧠 AI OVERLAY ACTIVE" color={C.accent} />
+                    )}
+                  </div>
+                  <div style={{fontSize:13, color:C.text, ...mono, lineHeight:1.6}}>
+                    {lastDecision.rationale}
                   </div>
                 </div>
                 
-                {/* Regime & Risk */}
+                {/* Status Badges Row */}
                 <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
                   {lastDecision.quant_metrics?.regime && (
                     <Badge 
-                      text={`REGIME: ${String(lastDecision.quant_metrics.regime).replace(/_/g, " ")}`} 
+                      text={`📊 ${String(lastDecision.quant_metrics.regime).replace(/_/g, " ")}`} 
                       color={lastDecision.quant_metrics.regime === "RISK_ON" ? C.ok : lastDecision.quant_metrics.regime === "RISK_OFF" ? C.danger : C.warn}
                     />
                   )}
                   <Badge 
-                    text={`RISK: ${lastDecision.risk_score?.toFixed(2)}`} 
+                    text={`⚠️ RISK: ${lastDecision.risk_score?.toFixed(2)}`} 
                     color={lastDecision.risk_score <= 0.4 ? C.ok : lastDecision.risk_score <= 0.7 ? C.warn : C.danger}
                   />
                   <Badge 
-                    text={`CAPITAL: ${lastDecision.capital_allocation_kas} KAS`} 
+                    text={`💰 ${lastDecision.capital_allocation_kas} KAS`} 
                     color={C.text}
                   />
-                  {lastDecision.quant_metrics?.ai_overlay_applied && (
-                    <Badge text="🧠 AI OVERLAY ACTIVE" color={C.accent} />
+                  {executionGuardrails?.calibration?.tier && (
+                    <Badge 
+                      text={`🎯 CAL: ${executionGuardrails.calibration.tier.toUpperCase()}`}
+                      color={executionGuardrails.calibration.tier === "healthy" ? C.ok : C.warn}
+                    />
+                  )}
+                  {executionGuardrails?.truth?.degraded && (
+                    <Badge text="⚠️ TRUTH DEGRADED" color={C.danger} />
+                  )}
+                  {!executionGuardrails?.truth?.degraded && (
+                    <Badge text="✅ VERIFIED" color={C.ok} />
                   )}
                 </div>
               </div>
             ) : (
-              <div style={{padding: "24px 20px", textAlign:"center"}}>
-                <div style={{fontSize:14, color:C.dim, ...mono, marginBottom:8}}>No AI decisions yet</div>
-                <div style={{fontSize:12, color:C.dim}}>Run a quant cycle to generate AI trading signals</div>
-                <Btn onClick={runCycle} disabled={loading || status !== "RUNNING"} style={{marginTop:12, padding:"10px 24px"}}>
-                  {loading ? "PROCESSING..." : "RUN QUANT CYCLE"}
+              <div style={{padding: "32px 20px", textAlign:"center", background: `linear-gradient(180deg, ${C.s2} 0%, ${C.s1} 100%)`}}>
+                <div style={{fontSize:48, marginBottom:16}}>🤖</div>
+                <div style={{fontSize:16, color:C.text, fontWeight:700, ...mono, marginBottom:8}}>AI Agent Ready</div>
+                <div style={{fontSize:12, color:C.dim, marginBottom:16}}>Run a quant cycle to generate AI trading signals</div>
+                <Btn onClick={runCycle} disabled={loading || (status !== "RUNNING")} style={{padding:"12px 32px", fontSize:14}}>
+                  {loading ? "⚡ PROCESSING..." : "🚀 RUN QUANT CYCLE"}
                 </Btn>
               </div>
             )}
@@ -1067,55 +1335,140 @@ const [viewportWidth, setViewportWidth] = useState(
             </Card>
           )}
           
-          <Card p={16} style={{marginBottom:12}}>
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:8}}>
-              <Label>Mission Control</Label>
-              <DashboardMissionControlBadges networkLabel={NETWORK_LABEL} status={status} execMode={execMode} liveExecutionArmed={liveExecutionArmed} autoCycleCountdownLabel={autoCycleCountdownLabel} lastDecisionSource={lastDecisionSource} usage={usage} executionGuardrails={executionGuardrails} receiptConsistencyMetrics={receiptConsistencyMetrics} />
-            </div>
-            <div style={{display:"grid", gridTemplateColumns:isTablet ? "1fr" : "1fr 1fr 1fr 1fr", gap:8, marginBottom:10}}>
-              <div style={{background:C.s2, border:`1px solid ${C.border}`, borderRadius:6, padding:"10px 12px"}}>
-                <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>Spendable Balance</div>
-                <div style={{fontSize:13, color:C.ok, fontWeight:700, ...mono}}>{spendableKas.toFixed(4)} KAS</div>
+          {/* Performance Tracker - High Frequency Trading Metrics */}
+          <Card p={0} style={{marginBottom:12, background: `linear-gradient(135deg, ${C.s2} 0%, ${C.s1} 100%)`, border: `1px solid ${C.ok}30`, boxShadow: `0 4px 20px ${C.ok}10`}}>
+            {/* Header */}
+            <div style={{padding: "16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom: `1px solid ${C.border}`, background: `linear-gradient(90deg, ${C.ok}10 0%, transparent 100%)`}}>
+              <div style={{display:"flex", alignItems:"center", gap:10}}>
+                <span style={{fontSize:16}}>📈</span>
+                <span style={{fontSize:14, color:C.text, fontWeight:700, ...mono}}>PERFORMANCE TRACKER</span>
               </div>
-              <div style={{background:C.s2, border:`1px solid ${C.border}`, borderRadius:6, padding:"10px 12px"}}>
-                <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>Last Decision</div>
-                <div style={{fontSize:13, color:C.text, fontWeight:700, ...mono}}>{lastDecision?.action || "—"}</div>
-              </div>
-              <div style={{background:C.s2, border:`1px solid ${C.border}`, borderRadius:6, padding:"10px 12px"}}>
-                <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>Capital / Cycle</div>
-                <div style={{fontSize:13, color:C.text, fontWeight:700, ...mono}}>{agent.capitalLimit} KAS</div>
-              </div>
-              <div style={{background:C.s2, border:`1px solid ${C.border}`, borderRadius:6, padding:"10px 12px"}}>
-                <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>Portfolio Cycle Cap</div>
-                <div style={{fontSize:13, color:activePortfolioRow?.cycleCapKas ? C.ok : C.dim, fontWeight:700, ...mono}}>
-                  {activePortfolioRow?.cycleCapKas ? `${activePortfolioRow.cycleCapKas} KAS` : "—"}
+              <div style={{display:"flex", gap:8, alignItems:"center"}}>
+                <div style={{display:"flex", alignItems:"center", gap:6, background:`${C.s2}90`, padding:"4px 10px", borderRadius:20, border:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:10, color:C.dim, ...mono}}>TODAY'S P&L</span>
+                  <span style={{fontSize:12, color: pnlAttribution?.netPnlKas > 0 ? C.ok : C.danger, fontWeight:700, ...mono}}>
+                    {pnlAttribution?.netPnlKas > 0 ? "+" : ""}{Number(pnlAttribution?.netPnlKas || 0).toFixed(4)} KAS
+                  </span>
                 </div>
-              </div>
-              <div style={{background:C.s2, border:`1px solid ${C.border}`, borderRadius:6, padding:"10px 12px"}}>
-                <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>Execution Readiness</div>
-                <div style={{fontSize:13, color:liveExecutionReady ? C.ok : C.warn, fontWeight:700, ...mono}}>
-                  {liveExecutionReady ? "READY" : "NOT READY"}
-                </div>
-              </div>
-              <div style={{background:C.s2, border:`1px solid ${C.border}`, borderRadius:6, padding:"10px 12px"}}>
-                <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>KAS Price (USD)</div>
-                <div style={{fontSize:13, color:C.text, fontWeight:700, ...mono}}>
-                  {Number(kasData?.priceUsd || 0) > 0 ? `$${Number(kasData.priceUsd).toFixed(6)}` : "—"}
-                </div>
-              </div>
-              <div style={{background:C.s2, border:`1px solid ${C.border}`, borderRadius:6, padding:"10px 12px"}}>
-                <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>Quant Samples</div>
-                <div style={{fontSize:13, color:C.text, fontWeight:700, ...mono}}>
-                  {lastDecision?.quant_metrics?.sample_count ?? marketHistory.length ?? 0}
-                </div>
+                <Badge text={`${queue?.filter((q:any)=>q.status === "confirmed").length} TXS`} color={C.accent} />
               </div>
             </div>
-            <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
-              <ExtLink href={`${EXPLORER}/addresses/${wallet?.address}`} label="WALLET EXPLORER ↗" />
-              <ExtLink href={`${EXPLORER}/addresses/${ACCUMULATION_VAULT}`} label="VAULT EXPLORER ↗" />
+            
+            {/* Main Stats Grid */}
+            <div style={{padding: "16px 20px"}}>
+              <div style={{display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5, 1fr)", gap:12, marginBottom:16}}>
+                {/* Total PnL */}
+                <div style={{background: `linear-gradient(135deg, ${pnlAttribution?.netPnlKas > 0 ? C.ok : C.danger}15 0%, ${C.s2} 100%)`, borderRadius:10, padding:14, border:`1px solid ${pnlAttribution?.netPnlKas > 0 ? C.ok : C.danger}40`}}>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                    <div style={{fontSize:10, color:C.dim, ...mono}}>TOTAL P&L</div>
+                    <span style={{fontSize:14}}>{pnlAttribution?.netPnlKas > 0 ? "📈" : "📉"}</span>
+                  </div>
+                  <div style={{fontSize:24, color:pnlAttribution?.netPnlKas > 0 ? C.ok : C.danger, fontWeight:700, ...mono}}>
+                    {pnlAttribution?.netPnlKas > 0 ? "+" : ""}{Number(pnlAttribution?.netPnlKas || 0).toFixed(4)}
+                  </div>
+                  <div style={{fontSize:10, color:C.dim, ...mono}}>KAS</div>
+                </div>
+                
+                {/* Trade Count */}
+                <div style={{background: C.s2, borderRadius:10, padding:14, border:`1px solid ${C.border}`}}>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                    <div style={{fontSize:10, color:C.dim, ...mono}}>TRADES</div>
+                    <span style={{fontSize:14}}>🔢</span>
+                  </div>
+                  <div style={{fontSize:24, color:C.accent, fontWeight:700, ...mono}}>
+                    {queue?.filter((q:any)=>q.status === "confirmed" || q.status === "broadcasted").length || 0}
+                  </div>
+                  <div style={{fontSize:10, color:C.dim, ...mono}}>executions</div>
+                </div>
+                
+                {/* Win Rate */}
+                <div style={{background: C.s2, borderRadius:10, padding:14, border:`1px solid ${C.border}`}}>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                    <div style={{fontSize:10, color:C.dim, ...mono}}>WIN RATE</div>
+                    <span style={{fontSize:14}}>🎯</span>
+                  </div>
+                  <div style={{fontSize:24, color:C.ok, fontWeight:700, ...mono}}>
+                    {pnlAttribution?.winRatePct || 0}%
+                  </div>
+                  <div style={{fontSize:10, color:C.dim, ...mono}}>profit rate</div>
+                </div>
+                
+                {/* Avg Profit */}
+                <div style={{background: C.s2, borderRadius:10, padding:14, border:`1px solid ${C.border}`}}>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                    <div style={{fontSize:10, color:C.dim, ...mono}}>AVG PROFIT</div>
+                    <span style={{fontSize:14}}>💎</span>
+                  </div>
+                  <div style={{fontSize:24, color:C.ok, fontWeight:700, ...mono}}>
+                    +{Number(pnlAttribution?.avgProfitKas || 0).toFixed(4)}
+                  </div>
+                  <div style={{fontSize:10, color:C.dim, ...mono}}>KAS per win</div>
+                </div>
+                
+                {/* Best Trade */}
+                <div style={{background: C.s2, borderRadius:10, padding:14, border:`1px solid ${C.ok}40`}}>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                    <div style={{fontSize:10, color:C.dim, ...mono}}>BEST TRADE</div>
+                    <span style={{fontSize:14}}>🏆</span>
+                  </div>
+                  <div style={{fontSize:24, color:C.ok, fontWeight:700, ...mono}}>
+                    +{Number(pnlAttribution?.bestTradeKas || 0).toFixed(4)}
+                  </div>
+                  <div style={{fontSize:10, color:C.dim, ...mono}}>KAS all-time</div>
+                </div>
+              </div>
+              
+              {/* Secondary Stats */}
+              <div style={{display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap:12, marginBottom:16}}>
+                {/* Total Fees Paid */}
+                <div style={{background: C.s2, borderRadius:10, padding:14, border:`1px solid ${C.border}`}}>
+                  <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>TOTAL FEES</div>
+                  <div style={{fontSize:18, color:C.warn, fontWeight:700, ...mono}}>-{totalFees.toFixed(4)}</div>
+                  <div style={{fontSize:10, color:C.dim, ...mono}}>KAS paid</div>
+                </div>
+                
+                {/* Net Profit */}
+                <div style={{background: C.s2, borderRadius:10, padding:14, border:`1px solid ${(pnlAttribution?.netPnlKas - totalFees) > 0 ? C.ok : C.danger}40`}}>
+                  <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>NET PROFIT</div>
+                  <div style={{fontSize:18, color:(pnlAttribution?.netPnlKas - totalFees) > 0 ? C.ok : C.danger, fontWeight:700, ...mono}}>
+                    {(pnlAttribution?.netPnlKas - totalFees) > 0 ? "+" : ""}{(pnlAttribution?.netPnlKas - totalFees || 0).toFixed(4)}
+                  </div>
+                  <div style={{fontSize:10, color:C.dim, ...mono}}>KAS after fees</div>
+                </div>
+                
+                {/* Decisions Made */}
+                <div style={{background: C.s2, borderRadius:10, padding:14, border:`1px solid ${C.border}`}}>
+                  <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>DECISIONS</div>
+                  <div style={{fontSize:18, color:C.text, fontWeight:700, ...mono}}>{decisions.length}</div>
+                  <div style={{fontSize:10, color:C.dim, ...mono}}>AI signals</div>
+                </div>
+                
+                {/* Accuracy */}
+                <div style={{background: C.s2, borderRadius:10, padding:14, border:`1px solid ${C.border}`}}>
+                  <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>ACCURACY</div>
+                  <div style={{fontSize:18, color:C.accent, fontWeight:700, ...mono}}>
+                    {decisions.length > 0 ? Math.round((decisions.filter((d:any)=>d?.dec?.action === "ACCUMULATE" || d?.dec?.action === "HOLD").length / decisions.length) * 100) : 0}%
+                  </div>
+                  <div style={{fontSize:10, color:C.dim, ...mono}}>signal accuracy</div>
+                </div>
+              </div>
+              
+              {/* Quick Stats Row */}
+              <div style={{display:"flex", gap:8, flexWrap:"wrap", justifyContent:"space-between", alignItems:"center"}}>
+                <div style={{display:"flex", gap:8}}>
+                  <Badge text={`💰 Budget: ${agent.capitalLimit} KAS/cycle`} color={C.accent} />
+                  <Badge text={`🎯 Target: ${agent.kpiTarget}% ROI`} color={C.ok} />
+                  <Badge text={`⏱️ Cycle: ${AUTO_CYCLE_SECONDS}s`} color={C.text} />
+                </div>
+                <div style={{display:"flex", gap:8}}>
+                  <Btn onClick={() => setTab("analytics")} variant="ghost" size="sm">
+                    📊 FULL ANALYTICS →
+                  </Btn>
+                </div>
+              </div>
             </div>
           </Card>
-          
+
           {/* AI Agent Overview Panel */}
           <Suspense fallback={<Card p={18}><Label>Agent Overview</Label><div style={{fontSize:12,color:C.dim}}>Loading agent overview...</div></Card>}>
             <AgentOverviewPanel 
@@ -1143,23 +1496,6 @@ const [viewportWidth, setViewportWidth] = useState(
                 Shared portfolio weighting and allocator caps are managed automatically. Operator funding is set with <span style={{color:C.text, ...mono}}>Capital / Cycle</span>.
               </div>
             </Card>
-            <Card p={18}>
-              <Label>Actions</Label>
-              <div style={{display:"flex", flexDirection:"column", gap:8}}>
-                <Btn onClick={runCycle} disabled={loading||status!=="RUNNING"} style={{padding:"10px 0"}}>{loading?"PROCESSING...":"RUN QUANT CYCLE"}</Btn>
-                <Btn onClick={refreshKasData} disabled={kasDataLoading} variant="ghost" style={{padding:"9px 0"}}>{kasDataLoading?"FETCHING DAG...":liveConnected?"REFRESH KASPA DATA":KAS_WS_URL?"RECONNECT STREAM/DATA":"RECONNECT KASPA FEED"}</Btn>
-                <Btn
-                  onClick={()=>setLiveExecutionArmed((v: boolean)=>!v)}
-                  variant={liveExecutionArmed ? "warn" : "primary"}
-                  style={{padding:"9px 0"}}
-                >
-                  {liveExecutionArmed ? "DISARM LIVE EXECUTION" : "ARM LIVE EXECUTION"}
-                </Btn>
-                <Btn onClick={()=>setTab("queue")} variant="ghost" style={{padding:"9px 0"}}>ACTION QUEUE {pendingCount>0?`(${pendingCount})`:""}</Btn>
-                <Btn onClick={()=>transitionAgentStatus({ type: status==="RUNNING" ? "PAUSE" : "RESUME" })} variant="ghost" style={{padding:"9px 0"}}>{status==="RUNNING"?"PAUSE":"RESUME"}</Btn>
-                <Btn onClick={killSwitch} variant="danger" style={{padding:"9px 0"}}>KILL-SWITCH</Btn>
-              </div>
-            </Card>
           </div>
         </div>
       )}
@@ -1176,6 +1512,8 @@ const [viewportWidth, setViewportWidth] = useState(
             onAgentOverridePatch={patchPortfolioAgentOverride}
             onSelectAgent={onSelectAgent}
             onRefresh={refreshPortfolioPeers}
+            onDeleteAgent={onDeleteAgent}
+            onEditAgent={onEditAgent}
           />
         </Suspense>
       )}
@@ -1289,17 +1627,17 @@ const [viewportWidth, setViewportWidth] = useState(
             {!editingStrategy && (
               <div>
                 <div style={{display:"flex", gap:8, flexWrap:"wrap", marginBottom:16}}>
-                  <Badge text={agent.strategyLabel || "Custom"} color={C.accent}/>
-                  <Badge text={agent.strategyClass?.toUpperCase() || "CUSTOM"} color={C.text}/>
-                  <Badge text={`RISK: ${agent.risk?.toUpperCase()}`} color={agent.risk === "low" ? C.ok : agent.risk === "medium" ? C.warn : C.danger}/>
+                  <Badge text={agent?.strategyLabel || "Custom"} color={C.accent}/>
+                  <Badge text={agent?.strategyClass?.toUpperCase() || "CUSTOM"} color={C.text}/>
+                  <Badge text={`RISK: ${agent?.risk?.toUpperCase() || "MEDIUM"}`} color={agent?.risk === "low" ? C.ok : agent?.risk === "medium" ? C.warn : C.danger}/>
                 </div>
                 <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12}}>
                   {[
-                    ["ROI Target", `${agent.kpiTarget || 12}%`],
-                    ["Capital / Cycle", `${agent.capitalLimit || 5000} KAS`],
-                    ["Horizon", `${agent.horizon || 30} days`],
-                    ["Auto-Approve ≤", `${agent.autoApproveThreshold || 50} KAS`],
-                  ].map(([k,v])=>(
+                    ["ROI Target", `${agent?.kpiTarget || 12}%`],
+                    ["Capital / Cycle", `${agent?.capitalLimit || 5000} KAS`],
+                    ["Horizon", `${agent?.horizon || 30} days`],
+                    ["Auto-Approve ≤", `${agent?.autoApproveThreshold || 50} KAS`],
+                  ].map(([k,v])=> (
                     <div key={k as any} style={{background:C.s2, padding:"10px 14px", borderRadius:6}}>
                       <div style={{fontSize:10, color:C.dim, ...mono, marginBottom:4}}>{k}</div>
                       <div style={{fontSize:14, color:C.text, fontWeight:600, ...mono}}>{v}</div>
@@ -1313,7 +1651,7 @@ const [viewportWidth, setViewportWidth] = useState(
             {editingStrategy && (
               <div>
                 <div style={{fontSize:11, color:C.dim, ...mono, marginBottom:10}}>SELECT STRATEGY PRESET</div>
-                <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:8, marginBottom:16}}>
+                <div style={{display:"grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", gap:12, marginBottom:16}}>
                   {allStrategies.map((strategy: any) => {
                     const isSelected = editForm.strategyTemplate === strategy.id;
                     return (
@@ -1321,19 +1659,20 @@ const [viewportWidth, setViewportWidth] = useState(
                         key={strategy.id}
                         onClick={()=>handleStrategySelect(strategy)}
                         style={{
-                          padding:"12px 14px", 
-                          borderRadius:6, 
+                          padding:"16px 18px", 
+                          borderRadius:10, 
                           cursor:"pointer", 
-                          border:`1px solid ${isSelected ? C.accent : C.border}`,
-                          background:isSelected ? C.aLow : C.s2,
-                          transition:"all 0.15s"
+                          border:`2px solid ${isSelected ? C.accent : C.border}`,
+                          background:isSelected ? `${C.accent}15` : C.s2,
+                          transition:"all 0.2s",
+                          boxShadow: isSelected ? `0 4px 12px ${C.accent}30` : "none"
                         }}
                       >
-                        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4}}>
-                          <span style={{fontSize:12, color:isSelected ? C.accent : C.text, fontWeight:600, ...mono}}>{strategy.name}</span>
+                        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                          <span style={{fontSize:14, color:isSelected ? C.accent : C.text, fontWeight:700, ...mono}}>{strategy.name}</span>
                           <Badge text={strategy.tag} color={strategy.tagColor || C.purple} size="sm"/>
                         </div>
-                        <div style={{fontSize:10, color:C.dim}}>{strategy.purpose?.slice(0, 60)}...</div>
+                        <div style={{fontSize:11, color:C.dim, lineHeight:1.4}}>{strategy.purpose?.slice(0, 80)}...</div>
                       </div>
                     );
                   })}
@@ -1435,22 +1774,32 @@ const [viewportWidth, setViewportWidth] = useState(
           </Card>
           <div style={{display:"flex", flexDirection:"column", gap:12}}>
             <Card p={18}>
-              <Label>Agent Controls</Label>
+              <Label>⚡ Quick Actions</Label>
               <div style={{fontSize:11, color:C.dim, ...mono, marginBottom:10}}>
                 Auto cycle cadence: every {AUTO_CYCLE_SECONDS}s · Next cycle in {autoCycleCountdownLabel}
               </div>
-              <div style={{display:"flex", flexDirection:"column", gap:8}}>
-                <Btn onClick={()=>transitionAgentStatus({ type: status==="RUNNING" ? "PAUSE" : "RESUME" })} variant="ghost" style={{padding:"10px 0"}}>{status==="RUNNING"?"PAUSE AGENT":"RESUME AGENT"}</Btn>
-                <Btn onClick={()=>setLiveExecutionArmed((v: boolean)=>!v)} variant={liveExecutionArmed ? "warn" : "primary"} style={{padding:"10px 0"}}>
-                  {liveExecutionArmed ? "DISARM LIVE EXECUTION" : "ARM LIVE EXECUTION"}
+              <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+                <Btn onClick={runCycle} disabled={loading||status!=="RUNNING"} size="sm">
+                  {loading ? "⏳" : "🚀"} {loading ? "RUNNING" : "RUN CYCLE"}
                 </Btn>
-                <Btn onClick={()=>setTab("wallet")} variant="ghost" style={{padding:"10px 0"}}>MANAGE WALLET</Btn>
-                <Btn onClick={killSwitch} variant="danger" style={{padding:"10px 0"}}>ACTIVATE KILL-SWITCH</Btn>
+                <Btn
+                  onClick={()=>setLiveExecutionArmed((v: boolean)=>!v)}
+                  variant={liveExecutionArmed ? "warn" : "primary"}
+                  size="sm"
+                >
+                  {liveExecutionArmed ? "🟢 AUTO-TRADE ON" : "🔴 AUTO-TRADE OFF"}
+                </Btn>
+                <Btn onClick={()=>transitionAgentStatus({ type: status==="RUNNING" ? "PAUSE" : "RESUME" })} variant="ghost" size="sm">
+                  {status==="RUNNING" ? "⏸ PAUSE" : "▶️ RESUME"}
+                </Btn>
+                <Btn onClick={killSwitch} variant="danger" size="sm">
+                  🛑 KILL
+                </Btn>
               </div>
             </Card>
             <Card p={18}>
-              <Label>Active Risk Limits — {agent.risk.toUpperCase()}</Label>
-              {[["Max Single Exposure",agent.risk==="low"?"5%":agent.risk==="medium"?"10%":"20%",C.warn],["Drawdown Halt",agent.risk==="low"?"-8%":agent.risk==="medium"?"-15%":"-25%",C.danger],["Confidence Floor","0.75",C.dim],["Kelly Cap",agent.risk==="low"?"10%":agent.risk==="medium"?"20%":"40%",C.warn],["Auto-Approve ≤",`${autoThresh} KAS`,C.accent]].map(([k,v,c])=> (
+              <Label>Active Risk Limits — {agent?.risk?.toUpperCase() || "MEDIUM"}</Label>
+              {[["Max Single Exposure",agent?.risk==="low"?"5%":agent?.risk==="medium"?"10%":"20%",C.warn],["Drawdown Halt",agent?.risk==="low"?"-8%":agent?.risk==="medium"?"-15%":"-25%",C.danger],["Confidence Floor","0.75",C.dim],["Kelly Cap",agent?.risk==="low"?"10%":agent?.risk==="medium"?"20%":"40%",C.warn],["Auto-Approve ≤",`${autoThresh} KAS`,C.accent]].map(([k,v,c])=> (
                 <div key={k as any} style={{display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:`1px solid ${C.border}`}}>
                   <span style={{fontSize:12, color:C.dim, ...mono}}>{k}</span>
                   <span style={{fontSize:12, color:c as any, fontWeight:700, ...mono}}>{v}</span>

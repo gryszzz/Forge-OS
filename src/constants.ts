@@ -129,9 +129,14 @@ export const AGENT_SPLIT = Number((1 - TREASURY_SPLIT).toFixed(2));    // remain
 export const TREASURY_FEE_ONCHAIN_ENABLED =
   String(env.VITE_TREASURY_FEE_ONCHAIN_ENABLED || "true").toLowerCase() !== "false";
 export const RESERVE  = 0.50;
-export const NET_FEE  = 0.0002;
+// Kaspa mainnet fee rate is 10 sompi/gram (up from the historical 1 sompi/gram).
+// A typical 1-in 2-out tx is ~1500 grams → 15 000 sompi ≈ 0.00015 KAS.
+// We round up to 0.001 KAS to ensure faster inclusion and account for larger txs.
+export const NET_FEE  = 0.001;
+// Explicit fee-rate constant used by wallet providers that accept it (e.g. Kasware v2+).
+export const KASPA_FEE_RATE_SOMPI_PER_GRAM = 10;
 export const CONF_THRESHOLD = 0.75;
-export const FREE_CYCLES_PER_DAY = Number(env.VITE_FREE_CYCLES_PER_DAY || 30);
+export const FREE_CYCLES_PER_DAY = Number(env.VITE_FREE_CYCLES_PER_DAY || 9999);
 export const BILLING_UPGRADE_URL = String(env.VITE_BILLING_UPGRADE_URL || "").trim();
 export const BILLING_CONTACT = String(env.VITE_BILLING_CONTACT || "").trim();
 export const AUTO_CYCLE_SECONDS = Number(env.VITE_AUTO_CYCLE_SECONDS || 120);
@@ -280,12 +285,21 @@ if (!Number.isFinite(TREASURY_SPLIT) || TREASURY_SPLIT < 0 || TREASURY_SPLIT > 1
 
 export const TREASURY_FEE_KAS = Number((FEE_RATE * TREASURY_SPLIT).toFixed(6));
 
+// High-Frequency Trading Configuration
+export const HF_MODE = String(env.VITE_HF_MODE || "false").toLowerCase() === "true";
+export const HF_MIN_CYCLE_SECONDS = 15;  // Minimum cycle time for high-frequency
+export const HF_MAX_CYCLES_PER_HOUR = 240;  // Max 1 cycle every 15 seconds
+export const HF_PROFIT_TARGET_PCT = Number(env.VITE_HF_PROFIT_TARGET_PCT || 0.5);  // 0.5% profit target
+export const HF_STOP_LOSS_PCT = Number(env.VITE_HF_STOP_LOSS_PCT || 2.0);  // 2% stop loss
+export const HF_MIN_TRADE_SIZE_KAS = Number(env.VITE_HF_MIN_TRADE_SIZE_KAS || 1);  // Minimum trade size
+export const HF_MAX_DAILY_TRADES = Number(env.VITE_HF_MAX_DAILY_TRADES || 100);  // Max trades per day
+
 if (!Number.isFinite(FREE_CYCLES_PER_DAY) || FREE_CYCLES_PER_DAY < 1) {
   throw new Error("Invalid VITE_FREE_CYCLES_PER_DAY. Expected an integer >= 1.");
 }
 
-if (!Number.isFinite(AUTO_CYCLE_SECONDS) || AUTO_CYCLE_SECONDS < 15) {
-  throw new Error("Invalid VITE_AUTO_CYCLE_SECONDS. Expected a numeric value >= 15.");
+if (!Number.isFinite(AUTO_CYCLE_SECONDS) || AUTO_CYCLE_SECONDS < HF_MIN_CYCLE_SECONDS) {
+  throw new Error(`Invalid VITE_AUTO_CYCLE_SECONDS. Expected a numeric value >= ${HF_MIN_CYCLE_SECONDS}.`);
 }
 
 if (!Number.isFinite(PNL_REALIZED_MIN_CONFIRMATIONS) || PNL_REALIZED_MIN_CONFIRMATIONS < 1) {

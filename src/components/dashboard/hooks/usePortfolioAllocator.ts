@@ -76,6 +76,14 @@ export function usePortfolioAllocator(params: UsePortfolioAllocatorParams) {
       const overrideKey = rowId.toLowerCase();
       const override = (portfolioConfig?.agentOverrides || {})[overrideKey] || {};
 
+      // Extract balance from peer runtime (use capitalLimit as default if not available)
+      const balanceKas = Number(row?.capitalLimitKas || row?.capitalLimit || 0);
+
+      // Extract PnL from attribution summary
+      const attributionSummary = (persisted as any).attributionSummary;
+      const pnlKas = Number(attributionSummary?.netPnlKas || 0);
+      const pnlMode = attributionSummary?.netPnlMode || "estimated";
+
       return {
         agentId: rowId,
         name: String(row?.name || rowId),
@@ -89,9 +97,12 @@ export function usePortfolioAllocator(params: UsePortfolioAllocatorParams) {
         riskBudgetWeight: Number(override.riskWeight ?? row?.riskBudgetWeight ?? 1),
         strategyTemplate: String(row?.strategyTemplate || row?.strategyLabel || row?.strategyClass || "custom"),
         strategyClass: String(row?.strategyClass || ""),
-        attributionSummary: (persisted as any).attributionSummary || undefined,
+        attributionSummary,
         pendingKas,
         lastDecision,
+        balanceKas,
+        pnlKas,
+        pnlMode,
       };
     });
 

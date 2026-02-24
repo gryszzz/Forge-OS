@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { C, mono } from "../../tokens";
 import { Badge, Card, Label } from "../ui";
+import { useAnalyticsWorker } from "./hooks/useAnalyticsWorker";
 
 function calculatePerformanceMetrics(decisions: any[], queue: any[]) {
   if (!decisions || decisions.length === 0) {
@@ -234,8 +235,12 @@ export function QuantAnalyticsPanel({ decisions = [], queue = [] }: { decisions?
   }, []);
 
   const isMobile = viewportWidth < 760;
-  const metrics = useMemo(() => calculatePerformanceMetrics(decisions, queue), [decisions, queue]);
-  const indicators = useMemo(() => calculateIndicators(decisions), [decisions]);
+
+  // Off-thread calculation via web worker
+  const workerResult = useAnalyticsWorker(decisions, queue);
+  // Fall back to synchronous calculation while worker is warming up
+  const metrics = workerResult.metrics ?? calculatePerformanceMetrics(decisions, queue);
+  const indicators = workerResult.indicators ?? calculateIndicators(decisions);
 
   const getScoreColor = (value: number, goodThreshold: number, badThreshold: number) => {
     if (value >= goodThreshold) return C.ok;

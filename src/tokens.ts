@@ -5,7 +5,7 @@ export const C = {
   text:"#EAF1F8", dim:"#8FA0B5",
   danger:"#FF5D7A", dLow:"#311520",
   warn:"#F7B267",  wLow:"#322515",
-  ok:"#4ADE80",    oLow:"#11261A",
+  ok:"#39DDB6",    oLow:"#112C2A",
   purple:"#8F7BFF",
   shadow:"0 18px 45px rgba(0,0,0,0.38)",
 };

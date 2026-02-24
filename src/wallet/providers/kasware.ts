@@ -76,10 +76,28 @@ export function createKaswareProvider(deps: any) {
       const normalizedAddress = normalizeKaspaAddress(toAddress, ALLOWED_ADDRESS_PREFIXES);
       const sompi = toSompi(amountKas);
 
+      // Kaspa mainnet fee rate is 10 sompi/gram (up from the old 1 sompi/gram).
+      // Pass a priorityFee option when the wallet API supports it (Kasware v2+).
+      // A safe priority fee of ~10 000 sompi (0.0001 KAS) ensures fast DAG inclusion.
+      const PRIORITY_FEE_SOMPI = 10000;
+
       let payload;
       try {
         if (typeof w.sendKaspa === "function") {
-          payload = await withTimeout(Promise.resolve(w.sendKaspa(normalizedAddress, sompi)), WALLET_SEND_TIMEOUT_MS, "kasware_send_kaspa");
+          // Try with options object first (Kasware v2+); fall back silently if not supported.
+          try {
+            payload = await withTimeout(
+              Promise.resolve(w.sendKaspa(normalizedAddress, sompi, { priorityFee: PRIORITY_FEE_SOMPI })),
+              WALLET_SEND_TIMEOUT_MS,
+              "kasware_send_kaspa_prio"
+            );
+          } catch {
+            payload = await withTimeout(
+              Promise.resolve(w.sendKaspa(normalizedAddress, sompi)),
+              WALLET_SEND_TIMEOUT_MS,
+              "kasware_send_kaspa"
+            );
+          }
         } else if (typeof w.sendKAS === "function") {
           payload = await withTimeout(Promise.resolve(w.sendKAS(normalizedAddress, sompi)), WALLET_SEND_TIMEOUT_MS, "kasware_send_kas");
         } else {

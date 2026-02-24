@@ -37,7 +37,6 @@ export type ForgeWalletRegistryItem = {
 };
 
 const KASTLE_LOGO_SRC = new URL("../assets/wallets/kastle.svg", import.meta.url).href;
-const GHOST_LOGO_SRC = new URL("../assets/wallets/ghost.svg", import.meta.url).href;
 
 export const FORGEOS_WALLET_CAPABILITY_REGISTRY: readonly ForgeWalletRegistryItem[] = [
   {
@@ -132,37 +131,6 @@ export const FORGEOS_WALLET_CAPABILITY_REGISTRY: readonly ForgeWalletRegistryIte
     notes: [
       "Injected `window.kastle` API supports connect/getAccount/request/sendKaspa/signMessage.",
       "Native sendKaspa is single-recipient; multi-output may be possible via signAndBroadcastTx(txJson) with a Forge.OS transaction builder path.",
-    ],
-  },
-  {
-    id: "ghost",
-    name: "Ghost Wallet",
-    class: "extension",
-    status: "live",
-    connectMode: "injected",
-    description: "Kaspa browser extension using a custom provider event bridge for account + transact calls.",
-    uiIcon: "👻",
-    logoSrc: GHOST_LOGO_SRC,
-    docsUrl: "https://github.com/ghost-wallet/web-extension",
-    websiteUrl: "https://github.com/ghost-wallet/web-extension",
-    sourceUrls: [
-      "https://github.com/ghost-wallet/web-extension",
-    ],
-    tags: ["kaspa", "browser-extension", "provider-bridge"],
-    capabilities: {
-      detect: false,
-      connect: true,
-      send: true,
-      network: true,
-      signMessage: false,
-      deeplink: false,
-      manualTxid: false,
-      psktSign: false,
-      nativeMultiOutputSend: "supported",
-    },
-    notes: [
-      "Ghost exposes a `kaspa:*` provider event protocol (account/transact) instead of a global injected object.",
-      "Provider transact accepts an outputs array, so multi-output treasury-combined sends are potentially viable in a future adapter path.",
     ],
   },
   {

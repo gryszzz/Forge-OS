@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ALLOWED_ADDRESS_PREFIXES, DEFAULT_NETWORK, DEMO_ADDRESS, NETWORK_LABEL } from "../constants";
 import { C, mono } from "../tokens";
 import { isKaspaAddress, normalizeKaspaAddress, shortAddr } from "../helpers";
@@ -6,7 +6,6 @@ import { WalletAdapter } from "../wallet/WalletAdapter";
 import {
   FORGEOS_CONNECTABLE_WALLETS,
   walletClassLabel,
-  walletMultiOutputLabel,
 } from "../wallet/walletCapabilityRegistry";
 import { formatForgeError } from "../runtime/errorTaxonomy";
 import { Badge, Btn, Card, Divider, ExtLink } from "./ui";
@@ -19,43 +18,12 @@ export function WalletGate({onConnect}: any) {
   const [kaspiumAddress, setKaspiumAddress] = useState("");
   const [savedKaspiumAddress, setSavedKaspiumAddress] = useState("");
   const [lastProvider, setLastProvider] = useState("");
-  const [ghostProviderCount, setGhostProviderCount] = useState<number | null>(null);
   const detected = WalletAdapter.detect();
   const kaspiumStorageKey = useMemo(() => `forgeos.kaspium.address.${DEFAULT_NETWORK}`, []);
   const providerStorageKey = useMemo(() => `forgeos.wallet.lastProvider.${DEFAULT_NETWORK}`, []);
   const activeKaspiumAddress = kaspiumAddress.trim();
   const kaspiumAddressValid = isKaspaAddress(activeKaspiumAddress, ALLOWED_ADDRESS_PREFIXES);
   const busy = Boolean(busyProvider);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const saved = window.localStorage.getItem(kaspiumStorageKey) || "";
-      const normalized = saved.trim();
-      if (normalized && isKaspaAddress(normalized, ALLOWED_ADDRESS_PREFIXES)) {
-        setSavedKaspiumAddress(normalized);
-      }
-      const rememberedProvider = (window.localStorage.getItem(providerStorageKey) || "").trim();
-      if (rememberedProvider) setLastProvider(rememberedProvider);
-    } catch {
-      // Ignore storage failures in strict browser contexts.
-    }
-  }, [kaspiumStorageKey, providerStorageKey]);
-
-  useEffect(() => {
-    let disposed = false;
-    if (typeof WalletAdapter.probeGhostProviders !== "function") return;
-    WalletAdapter.probeGhostProviders(250)
-      .then((providers: any[]) => {
-        if (!disposed) setGhostProviderCount(Array.isArray(providers) ? providers.length : 0);
-      })
-      .catch(() => {
-        if (!disposed) setGhostProviderCount(0);
-      });
-    return () => {
-      disposed = true;
-    };
-  }, []);
 
   const persistKaspiumAddress = (value: string) => {
     const normalized = value.trim();
@@ -128,9 +96,6 @@ export function WalletGate({onConnect}: any) {
       } else if(provider === "kastle") {
         session = await WalletAdapter.connectKastle();
         setInfo("Kastle session ready. Extension signing is armed.");
-      } else if(provider === "ghost") {
-        session = await WalletAdapter.connectGhost();
-        setInfo("Ghost Wallet session ready. Provider bridge is connected.");
       } else if(provider === "tangem" || provider === "onekey") {
         const resolvedAddress = await resolveManualBridgeAddress(provider === "tangem" ? "Tangem" : "OneKey");
         session = await WalletAdapter.connectHardwareBridge(provider as "tangem" | "onekey", resolvedAddress);
@@ -153,7 +118,7 @@ export function WalletGate({onConnect}: any) {
     setBusyProvider(null);
   };
 
-  const wallets = FORGEOS_CONNECTABLE_WALLETS.map((w) => {
+  const wallets = FORGEOS_CONNECTABLE_WALLETS.filter(w => w.id !== "ghost").map((w) => {
     if (w.id === "kasware") {
       return {
         ...w,
@@ -168,20 +133,6 @@ export function WalletGate({onConnect}: any) {
         statusText: detected.kastle ? "Detected in this tab" : "Not detected in this tab",
         statusColor: detected.kastle ? C.ok : C.warn,
         cta: "Connect Kastle",
-      };
-    }
-    if (w.id === "ghost") {
-      const detectedGhost = Number(ghostProviderCount || 0) > 0;
-      return {
-        ...w,
-        statusText:
-          ghostProviderCount == null
-            ? "Scanning provider bridge..."
-            : detectedGhost
-              ? `Detected ${ghostProviderCount} provider${ghostProviderCount === 1 ? "" : "s"}`
-              : "Provider probes on connect",
-        statusColor: ghostProviderCount == null ? C.dim : detectedGhost ? C.ok : C.warn,
-        cta: "Connect Ghost",
       };
     }
     if (w.id === "kaspium") {
@@ -210,7 +161,7 @@ export function WalletGate({onConnect}: any) {
 
   const walletSections = useMemo(() => {
     const ordered = Array.isArray(wallets) ? wallets : [];
-    const direct = ordered.filter((w) => ["kasware", "kastle", "ghost"].includes(String(w.id)));
+    const direct = ordered.filter((w) => ["kasware", "kastle"].includes(String(w.id)));
     const mobileBridge = ordered.filter((w) => ["kaspium", "tangem", "onekey"].includes(String(w.id)));
     const sandbox = ordered.filter((w) => String(w.id) === "demo");
     const other = ordered.filter(
@@ -254,8 +205,8 @@ export function WalletGate({onConnect}: any) {
             </p>
             <div style={{display:"flex", gap:8, flexWrap:"wrap", marginTop:16}}>
               <Badge text={`${NETWORK_LABEL} SESSION`} color={C.ok} dot/>
-              <Badge text="WALLET-NATIVE AUTHORIZATION" color={C.accent} dot/>
-              <Badge text="SESSION CONTINUITY" color={C.purple} dot/>
+              <Badge text="WALLET-NATIVE AUTHORIZATION" color={C.purple} dot/>
+              <Badge text="SESSION CONTINUITY" color={C.warn} dot/>
             </div>
 
             <div className="forge-gate-hero-strip">
@@ -304,6 +255,22 @@ export function WalletGate({onConnect}: any) {
               >
                 <span style={{fontSize:14}}>⌘</span>
                 <span>GitHub</span>
+              </a>
+              <a 
+                href="https://t.me/ForgeOSDefi" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display:"flex", alignItems:"center", gap:8,
+                  padding:"8px 14px", borderRadius:6,
+                  background:C.s2, border:`1px solid ${C.border}`,
+                  color:C.text, textDecoration:"none",
+                  fontSize:11, fontWeight:600, ...mono,
+                  transition:"all 0.15s"
+                }}
+              >
+                <span style={{fontSize:14}}>✈</span>
+                <span>Telegram</span>
               </a>
             </div>
           </div>
@@ -372,7 +339,7 @@ export function WalletGate({onConnect}: any) {
                                   flexShrink: 0,
                                 }}
                               >
-                                <img src={w.logoSrc} alt={`${w.name} logo`} style={{width: 22, height: 22, objectFit: "contain"}} />
+                                <img src={w.logoSrc} alt={`${w.name} logo`} style={{width: 28, height: 28, objectFit: "contain"}} />
                               </div>
                             ) : (
                               <div style={{fontSize:22, width:32, display:"flex", justifyContent:"center", flexShrink:0}}>{w.uiIcon}</div>
@@ -442,3 +409,4 @@ export function WalletGate({onConnect}: any) {
     </div>
   );
 }
+
