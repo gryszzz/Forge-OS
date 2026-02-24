@@ -189,9 +189,16 @@ test.describe("ForgeOS E2E", () => {
 
     const actionId = await injectPendingActionQueueItem(page, { amountKas: 1.33, purpose: "treasury queue seed" });
     await page.getByTestId("dashboard-tab-queue").click();
+    // kaswareProvider.send() first tries with priorityFee, then silently falls back to a
+    // second sendKaspa call if the first throws. So each "send" may consume two plan slots.
+    // Action sign: prio-fee attempt succeeds (plan[0]) — no fallback consumed.
+    // Treasury auto-send: prio-fee attempt fails (plan[1]) → inner catch → fallback also
+    //   fails (plan[2]) → outer catch → enqueueTreasuryFeeTx → PENDING.
+    // Treasury manual sign: prio-fee attempt succeeds (plan[3]) — no fallback consumed.
     await setKaswareSendPlan(page, [
       { txid: txid("action") },
-      { error: "treasury send rejected" },
+      { error: "treasury prio-fee rejected" },
+      { error: "treasury fallback rejected" },
       { txid: txid("treasury") },
     ]);
 

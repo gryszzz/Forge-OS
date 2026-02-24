@@ -136,7 +136,7 @@ export function DashboardMissionControlBadges(props: Props) {
         {/* Auto Cycle */}
         <div style={{ background: C.s2, padding: "5px 10px", borderRadius: 5, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 5 }}>
           <span style={{ fontSize: 12 }}>⏱️</span>
-          <span style={{ fontSize: 10, color: status === "RUNNING" ? C.text : C.dim, fontWeight: 700, ...mono }}>{autoCycleCountdownLabel}</span>
+          <span style={{ fontSize: 10, color: status === "RUNNING" ? C.text : C.dim, fontWeight: 700, ...mono }}>{`AUTO ${autoCycleCountdownLabel}`}</span>
         </div>
 
         {/* Decision Source */}
