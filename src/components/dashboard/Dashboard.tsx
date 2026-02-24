@@ -1029,10 +1029,10 @@ const [viewportWidth, setViewportWidth] = useState(
                   {liveExecutionArmed ? "🟢 AUTO-TRADE ON" : "🔴 AUTO-TRADE OFF"}
                 </Btn>
                 <Btn onClick={()=>transitionAgentStatus({ type: status==="RUNNING" ? "PAUSE" : "RESUME" })} variant="ghost" size="sm">
-                  {status==="RUNNING" ? "⏸ PAUSE" : "▶️ RESUME"}
+                  {status==="RUNNING" ? "⏸ PAUSE AGENT" : "▶️ RESUME AGENT"}
                 </Btn>
                 <Btn onClick={killSwitch} variant="danger" size="sm">
-                  🛑 KILL
+                  🛑 KILL-SWITCH
                 </Btn>
               </div>
               <div style={{display:"flex", alignItems:"center", gap:6}}>
@@ -1807,10 +1807,10 @@ const [viewportWidth, setViewportWidth] = useState(
                   {liveExecutionArmed ? "🟢 AUTO-TRADE ON" : "🔴 AUTO-TRADE OFF"}
                 </Btn>
                 <Btn onClick={()=>transitionAgentStatus({ type: status==="RUNNING" ? "PAUSE" : "RESUME" })} variant="ghost" size="sm">
-                  {status==="RUNNING" ? "⏸ PAUSE" : "▶️ RESUME"}
+                  {status==="RUNNING" ? "⏸ PAUSE AGENT" : "▶️ RESUME AGENT"}
                 </Btn>
                 <Btn onClick={killSwitch} variant="danger" size="sm">
-                  🛑 KILL
+                  🛑 KILL-SWITCH
                 </Btn>
               </div>
             </Card>

@@ -232,9 +232,9 @@ test.describe("ForgeOS E2E", () => {
 
     await expect(page.getByText(/AUTO \d{2}:\d{2}/i)).toBeVisible();
     await page.getByTestId("dashboard-tab-controls").click();
-    await page.getByRole("button", { name: /^PAUSE AGENT$/i }).click();
+    await page.getByRole("button", { name: /PAUSE AGENT/i }).click();
     await expect(page.getByText(/^PAUSED$/i)).toBeVisible();
-    await page.getByRole("button", { name: /^RESUME AGENT$/i }).click();
+    await page.getByRole("button", { name: /RESUME AGENT/i }).click();
     await expect(page.getByText(/^RUNNING$/i)).toBeVisible();
 
     const killPendingId = await injectPendingActionQueueItem(page, { amountKas: 0.9, purpose: "kill switch pending queue item" });
