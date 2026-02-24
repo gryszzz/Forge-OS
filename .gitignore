@@ -23,3 +23,6 @@ tsconfig.tsbuildinfo
 # Playwright
 playwright-report/
 test-results/
+
+# build outputs
+dist/
