@@ -180,10 +180,10 @@ export function WalletGate({onConnect}: any) {
       <div className="forge-content forge-gate-responsive" style={{ width: "100%", maxWidth: 1380, display: "grid", gridTemplateColumns: "minmax(0,1.1fr) minmax(320px,520px)", gap: "clamp(16px, 3vw, 28px)", alignItems: "start" }}>
 
         {/* ── HERO COLUMN ── */}
-        <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <section style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
 
           {/* Kicker + title */}
-          <div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
             <div style={{ fontSize: 9, color: C.accent, fontWeight: 700, ...mono, letterSpacing: "0.2em", marginBottom: 12 }}>
               FORGE-OS // KASPA-NATIVE QUANT STACK
             </div>
@@ -192,10 +192,10 @@ export function WalletGate({onConnect}: any) {
               <span style={{ color: C.text, fontWeight: 800 }}>AI TRADING</span><br />
               <span style={{ color: C.dim, fontWeight: 500, fontSize: "0.85em" }}>⚡ BLOCKDAG SPEED</span>
             </h1>
-            <p style={{ font: `500 13px/1.5 'Space Grotesk','Segoe UI',sans-serif`, color: "#9db0c6", maxWidth: "50ch", margin: "0 0 12px" }}>
+            <p style={{ font: `500 13px/1.5 'Space Grotesk','Segoe UI',sans-serif`, color: "#9db0c6", maxWidth: "52ch", margin: "0 0 12px" }}>
               Full-stack DeFi for Kaspa. AI agents accumulate KAS now & execute KAS/USDC pairs when stablecoins launch on L1.
             </p>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
               <Badge text={`${NETWORK_LABEL}`} color={C.ok} dot />
               <Badge text="KAS / USDC READY" color={C.purple} dot />
               <Badge text="NON-CUSTODIAL" color={C.warn} dot />
