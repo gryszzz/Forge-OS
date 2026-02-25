@@ -117,7 +117,7 @@ async function connectKaswareAndDeploy(page: Page, agentName = "E2E Agent", depl
   await page.getByRole("button", { name: /^next$/i }).click();
   await page.getByRole("button", { name: /deploy agent/i }).click();
   await page.getByRole("button", { name: /^sign & broadcast$/i }).click();
-  await expect(page.getByText(new RegExp(`FORGE\\.OS / AGENT / ${agentName}`, "i"))).toBeVisible();
+  await expect(page.getByText(new RegExp(`Forge-OS / AGENT / ${agentName}`, "i"))).toBeVisible();
 }
 
 async function injectPendingActionQueueItem(page: Page, opts?: { amountKas?: number; type?: string; purpose?: string }) {
@@ -154,7 +154,7 @@ test.describe("ForgeOS E2E", () => {
   test("wallet gate supports demo mode", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: /enter demo mode/i }).click();
-    await expect(page.getByText(/forge\.os \/ new agent/i)).toBeVisible();
+    await expect(page.getByText(/forge-os \/ new agent/i)).toBeVisible();
     await expect(page.getByText(/DEMO/i)).toBeVisible();
   });
 
