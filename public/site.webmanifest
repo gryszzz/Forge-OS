@@ -7,7 +7,7 @@
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#00C2A8",
-  "background_color": "#0b0f14",
+  "background_color": "#05070a",
   "icons": [
     {
       "src": "/forge-os-icon3.png",

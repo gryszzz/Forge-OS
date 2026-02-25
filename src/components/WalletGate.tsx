@@ -179,7 +179,7 @@ export function WalletGate({onConnect}: any) {
       <ForgeAtmosphere />
       {/* Top-left logo mark */}
       <div style={{ position: "fixed", top: 16, left: 18, zIndex: 10, display: "flex", alignItems: "center", gap: 8 }}>
-        <img src="/forge-os-icon3.png" alt="Forge-OS" style={{ width: 42, height: 42, objectFit: "contain", filter: "drop-shadow(0 0 8px rgba(57,221,182,0.5))" }} />
+        <img src="/forge-os-icon3.png" alt="Forge-OS" style={{ width: 84, height: 84, objectFit: "contain", filter: "drop-shadow(0 0 8px rgba(57,221,182,0.5))" }} />
         <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", ...mono, color: C.text }}>
           <span style={{ color: C.accent }}>FORGE</span>-OS
         </span>

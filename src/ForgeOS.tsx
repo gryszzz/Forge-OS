@@ -114,7 +114,7 @@ export default function ForgeOS() {
       <div className="forge-topbar" style={{borderBottom:`1px solid ${C.border}`, padding:"12px clamp(14px, 2vw, 24px)", display:"flex", flexDirection:isMobile ? "column" : "row", alignItems:isMobile ? "stretch" : "center", justifyContent:"space-between", gap:isMobile ? 10 : 0}}>
         <div style={{display:"flex", alignItems:"center", gap:14, justifyContent:isMobile ? "space-between" : "flex-start"}}>
           <div style={{display:"flex", alignItems:"center", gap:8}}>
-            <img src="/forge-os-icon3.png" alt="Forge-OS" style={{width:38, height:38, objectFit:"contain", filter:"drop-shadow(0 0 8px rgba(57,221,182,0.5))"}} />
+            <img src="/forge-os-icon3.png" alt="Forge-OS" style={{width:76, height:76, objectFit:"contain", filter:"drop-shadow(0 0 8px rgba(57,221,182,0.5))"}} />
             <div style={{fontSize:14, fontWeight:700, letterSpacing:"0.14em", ...mono}}>
               <span style={{color:C.accent}}>FORGE</span><span style={{color:C.text}}>-OS</span>
             </div>
