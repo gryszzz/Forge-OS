@@ -912,6 +912,8 @@ const [viewportWidth, setViewportWidth] = useState(
           {wallet?.provider && <Badge text={wallet?.provider?.toUpperCase()} color={C.purple} dot/>}
           {/* ENGINE WORKER — only when quant engine is in worker mode */}
           {quantClientMode === "worker" && <Badge text="ENGINE WORKER" color={C.ok}/>}
+          {/* Auto cycle countdown */}
+          {autoCycleCountdownLabel && <Badge text={`AUTO ${autoCycleCountdownLabel}`} color={status==="RUNNING"?C.text:C.dim}/>}
           {/* Live feed badges */}
           {liveConnected && <Badge text="DAG LIVE" color={C.ok} dot/>}
           {streamConnected && streamBadgeText && <Badge text={streamBadgeText} color={streamBadgeColor} dot/>}
