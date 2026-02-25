@@ -289,14 +289,11 @@ export function WalletGate({onConnect}: any) {
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
           {/* Branding lockup */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, justifyContent: "center" }}>
-            <img src="/forge-os-icon2.png" alt="Forge-OS" style={{ width: 48, height: 48, objectFit: "contain", filter: "drop-shadow(0 0 10px rgba(57,221,182,0.5))" }} />
-            <div>
-              <div style={{ fontSize: "clamp(18px,3vw,24px)", fontWeight: 700, ...mono, letterSpacing: "0.12em", lineHeight: 1.2 }}>
-                <span style={{ color: C.accent }}>FORGE</span><span style={{ color: C.text }}>-OS</span>
-              </div>
-              <div style={{ fontSize: 9, color: C.dim, letterSpacing: "0.1em", ...mono }}>AI-NATIVE FINANCIAL OPERATING SYSTEM · POWERED BY KASPA</div>
+          <div style={{ textAlign: "center", marginBottom: 4 }}>
+            <div style={{ fontSize: "clamp(18px,3vw,24px)", fontWeight: 700, ...mono, letterSpacing: "0.12em", lineHeight: 1.2 }}>
+              <span style={{ color: C.accent }}>FORGE</span><span style={{ color: C.text }}>-OS</span>
             </div>
+            <div style={{ fontSize: 9, color: C.dim, letterSpacing: "0.1em", ...mono }}>AI-NATIVE FINANCIAL OPERATING SYSTEM · POWERED BY KASPA</div>
           </div>
 
           {/* Connect card */}
