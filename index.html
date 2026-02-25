@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Forge-OS</title>
+    <meta name="description" content="Wallet-native AI agent execution and quant trading on Kaspa BlockDAG. Non-custodial. KAS/USDC pair-ready." />
+    <meta name="theme-color" content="#00C2A8" />
+    <meta name="color-scheme" content="dark" />
+
+    <!-- Favicon – multi-size so Chrome picks sharpest for tab/toolbar/new-tab -->
+    <link rel="icon" type="image/x-icon" href="/Forge-OS/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/Forge-OS/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/Forge-OS/favicon-48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/Forge-OS/favicon-96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/Forge-OS/favicon-192.png" />
+
+    <!-- Apple / iOS -->
+    <link rel="apple-touch-icon" href="/Forge-OS/forge-os-app-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Forge-OS" />
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/Forge-OS/site.webmanifest" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Forge-OS" />
+    <meta property="og:title" content="Forge-OS — AI Agent Execution on Kaspa" />
+    <meta property="og:description" content="Wallet-native AI agent execution and quant trading on Kaspa BlockDAG. Non-custodial. KAS/USDC pair-ready." />
+    <meta property="og:image" content="https://forge-os.io/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="https://forge-os.io/" />
+
+    <!-- Twitter card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Forge-OS — AI Agent Execution on Kaspa" />
+    <meta name="twitter:description" content="Wallet-native AI agent execution and quant trading on Kaspa BlockDAG. Non-custodial. KAS/USDC pair-ready." />
+    <meta name="twitter:image" content="https://forge-os.io/og.png" />
+
+    <script type="module" crossorigin src="/Forge-OS/assets/index-BdD6PJt4.js"></script>
+    <link rel="modulepreload" crossorigin href="/Forge-OS/assets/react-vendor-DIZeG9y9.js">
+    <link rel="modulepreload" crossorigin href="/Forge-OS/assets/d3-render-vendor-RkpHolfk.js">
+    <link rel="modulepreload" crossorigin href="/Forge-OS/assets/d3-scale-vendor-BynLqmir.js">
+    <link rel="modulepreload" crossorigin href="/Forge-OS/assets/recharts-vendor-DOrdnfgd.js">
+    <link rel="stylesheet" crossorigin href="/Forge-OS/assets/index-DveipMYb.css">
+  </head>
+  <body>
+    <div id="root">
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#05070a;color:#eaf1f8;font:500 14px/1.4 'IBM Plex Mono',monospace;letter-spacing:.08em;">
+        LAUNCHING FORGEOS...
+      </div>
+    </div>
+    <script>
+      (function () {
+        const FETCH_TIMEOUT_MS = 3500;
+        const BOOT_TIMEOUT_MS = 12000;
+        const RETRY_QUERY_KEY = "_reload";
+        let didFailOpen = false;
+        let triedRecovery = false;
+
+        function withCacheBust(url) {
+          const separator = url.includes("?") ? "&" : "?";
+          return `${url}${separator}v=${encodeURIComponent(Date.now().toString())}`;
+        }
+
+        function pickEntry(manifest) {
+          if(!manifest || typeof manifest !== "object") return null;
+          const byMain = Object.entries(manifest).find(([, entry]) => entry && entry.name === "main" && entry.isEntry);
+          const byEntry = Object.entries(manifest).find(([, entry]) => entry && entry.isEntry);
+          return (
+            (manifest["src/main.tsx"] && { key: "src/main.tsx", file: manifest["src/main.tsx"].file }) ||
+            (manifest["index.html"] && { key: "index.html", file: manifest["index.html"].file }) ||
+            (byMain && { key: byMain[0], file: byMain[1].file }) ||
+            (byEntry && { key: byEntry[0], file: byEntry[1].file }) ||
+            null
+          );
+        }
+
+        function resolveCssDeps(manifest, entryKey) {
+          if(!manifest || typeof manifest !== "object") return [];
+          const css = new Set();
+          const visited = new Set();
+
+          function walk(key) {
+            if(!key || visited.has(key)) return;
+            visited.add(key);
+            const node = manifest[key];
+            if(!node || typeof node !== "object") return;
+            if(Array.isArray(node.imports)) {
+              for(const child of node.imports) walk(child);
+            }
+            if(Array.isArray(node.css)) {
+              for(const file of node.css) css.add(file);
+            }
+          }
+
+          if(entryKey) walk(entryKey);
+          return Array.from(css);
+        }
+
+        function ensureCssLoaded(base, files) {
+          const normalizedBase = base.endsWith("/") ? base : `${base}/`;
+          for(const file of files || []) {
+            const normalizedFile = String(file || "").replace(/^\.\//, "");
+            if(!normalizedFile) continue;
+            const href = withCacheBust(`${normalizedBase}${normalizedFile}`);
+            const existing = document.querySelector("link[rel='stylesheet'][data-forgeos-recovery='" + normalizedFile + "']");
+            if(existing) continue;
+            const link = document.createElement("link");
+            link.rel = "stylesheet";
+            link.href = href;
+            link.dataset.forgeosRecovery = normalizedFile;
+            document.head.appendChild(link);
+          }
+        }
+
+        async function fetchWithTimeout(url, options, timeoutMs) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            const merged = Object.assign({}, options || {}, { signal: controller.signal });
+            return await fetch(url, merged);
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        }
+
+        async function recoverFromManifest() {
+          if(triedRecovery) return false;
+          triedRecovery = true;
+
+          const candidates = [
+            { url: "/manifest.json", base: "/" },
+            { url: "./manifest.json", base: "./" },
+            { url: "/dist/manifest.json", base: "/dist/" },
+            { url: "./dist/manifest.json", base: "./dist/" },
+            { url: "/Forge-OS/manifest.json", base: "/Forge-OS/" },
+            { url: "/Forge-OS/dist/manifest.json", base: "/Forge-OS/dist/" },
+          ];
+
+          const seen = new Set();
+          for(const candidate of candidates) {
+            if(!candidate || !candidate.url || seen.has(candidate.url)) continue;
+            seen.add(candidate.url);
+            try {
+              const response = await fetchWithTimeout(withCacheBust(candidate.url), { cache: "no-store" }, FETCH_TIMEOUT_MS);
+              if(!response.ok) continue;
+              const manifest = await response.json();
+              const entry = pickEntry(manifest);
+              if(!entry || !entry.file) continue;
+              const base = candidate.base.endsWith("/") ? candidate.base : `${candidate.base}/`;
+              const file = String(entry.file).replace(/^\.\//, "");
+              ensureCssLoaded(base, resolveCssDeps(manifest, entry.key));
+              await import(withCacheBust(`${base}${file}`));
+              return true;
+            } catch {
+              // Keep scanning candidates.
+            }
+          }
+
+          return false;
+        }
+
+        function showBootFailure(error) {
+          if(window.__FORGEOS_BOOTED__ || didFailOpen) return;
+          didFailOpen = true;
+          console.error("ForgeOS bootstrap failed", error);
+          const root = document.getElementById("root");
+          if(!root) return;
+          const detail = String((error && error.message) || error || "Unknown error").replace(/[<>]/g, "");
+          root.innerHTML = `<div style='min-height:100vh;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;background:#05070a;color:#eaf1f8;font:500 14px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;padding:24px;text-align:center'><div>ForgeOS failed to load. Hard refresh (Cmd/Ctrl+Shift+R). If it continues, retry with cache bust.</div><div style='opacity:.72;font-size:12px'>${detail}</div><button id='forgeos-retry-btn' style='border:1px solid #39ddb655;background:#0b1620;color:#39ddb6;padding:8px 14px;border-radius:8px;cursor:pointer'>Retry Now</button></div>`;
+          const retryBtn = document.getElementById("forgeos-retry-btn");
+          if(retryBtn) {
+            retryBtn.addEventListener("click", () => {
+              const next = new URL(window.location.href);
+              next.searchParams.set(RETRY_QUERY_KEY, Date.now().toString());
+              window.location.replace(next.toString());
+            });
+          }
+        }
+
+        function isRecoverableBundleError(error) {
+          const message = String((error && error.message) || error || "").toLowerCase();
+          return (
+            message.includes("failed to fetch dynamically imported module") ||
+            message.includes("error loading dynamically imported module") ||
+            message.includes("importing a module script failed") ||
+            message.includes("failed to load module script")
+          );
+        }
+
+        async function attemptRecovery(error) {
+          if(window.__FORGEOS_BOOTED__) return;
+          const recovered = await recoverFromManifest();
+          if(!recovered) {
+            showBootFailure(error || new Error("bootstrap timeout"));
+            return;
+          }
+          setTimeout(() => {
+            if(!window.__FORGEOS_BOOTED__) {
+              showBootFailure(new Error("module recovered from manifest but app did not boot"));
+            }
+          }, 3000);
+        }
+
+        window.addEventListener("error", (event) => {
+          const reason = event.error || event.message;
+          if(isRecoverableBundleError(reason)) {
+            attemptRecovery(reason).catch(showBootFailure);
+          }
+        });
+
+        window.addEventListener("unhandledrejection", (event) => {
+          if(isRecoverableBundleError(event.reason)) {
+            attemptRecovery(event.reason).catch(showBootFailure);
+          }
+        });
+
+        setTimeout(() => {
+          if(!window.__FORGEOS_BOOTED__) {
+            attemptRecovery(new Error("bootstrap timeout")).catch(showBootFailure);
+          }
+        }, BOOT_TIMEOUT_MS);
+      })();
+    </script>
+    <noscript>
+      <div style="padding:24px;background:#05070a;color:#eaf1f8;font:500 14px/1.4 'IBM Plex Mono',monospace;">
+        ForgeOS requires JavaScript enabled.
+      </div>
+    </noscript>
+  </body>
+</html>
