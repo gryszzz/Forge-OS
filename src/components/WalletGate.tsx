@@ -175,10 +175,10 @@ export function WalletGate({onConnect}: any) {
   }, [wallets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="forge-shell" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: "clamp(12px, 2vw, 20px)" }}>
+    <div className="forge-shell" style={{ display: "flex", flexDirection: "column", alignItems: "center", minHeight: "100vh", padding: "clamp(12px, 2vw, 20px)" }}>
       <ForgeAtmosphere />
-      {/* Top-left logo mark */}
-      <div style={{ position: "fixed", top: 16, left: 18, zIndex: 10, display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Top-left logo mark — part of page flow */}
+      <div style={{ width: "100%", maxWidth: 1380, display: "flex", alignItems: "center", gap: 10, paddingBottom: 18, position: "relative", zIndex: 2 }}>
         <img src="/forge-os-icon3.png" alt="Forge-OS" style={{ width: 126, height: 126, objectFit: "contain", filter: "drop-shadow(0 0 8px rgba(57,221,182,0.5))" }} />
         <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: "0.12em", ...mono, color: C.text }}>
           <span style={{ color: C.accent }}>FORGE</span>-OS
