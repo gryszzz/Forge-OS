@@ -550,24 +550,6 @@ export function WalletCreator({ onConnect, onClose }: Props) {
               </div>
             </div>
 
-            {/* Interop note */}
-            <div
-              style={{
-                background: `${C.accent}0A`,
-                border: `1px solid ${C.accent}25`,
-                borderRadius: 8,
-                padding: "8px 12px",
-              }}
-            >
-              <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.5 }}>
-                <span style={{ color: C.accent, fontWeight: 700 }}>BIP44 Kaspa: </span>
-                Works with any BIP44 compatible Kaspa wallet
-                <br />
-                Derivation path:{" "}
-                <span style={{ color: C.accent, ...mono }}>m/44'/111'/0'/0/0</span>
-              </div>
-            </div>
-
             <textarea
               value={importPhrase}
               onChange={(e) => {
