@@ -21,6 +21,7 @@ import {
   loadPrefetchedKrcPortfolio,
   savePrefetchedKrcPortfolio,
 } from "../portfolio/krcPortfolio";
+import { downsampleChartPoints } from "../portfolio/chartDownsample";
 import type { KrcPortfolioToken } from "../portfolio/types";
 import { resolveTokenFromAddress, resolveTokenFromQuery } from "../swap/tokenResolver";
 import type { KaspaTokenStandard, SwapCustomToken } from "../swap/types";
@@ -72,6 +73,39 @@ const EXPLORERS: Record<string, string> = {
 
 const KAS_CHART_MAX_POINTS = 900; // ~15m at 1s cadence
 const KAS_FEED_POLL_MS = 1_000;
+const EXT_ENV = (import.meta as any)?.env ?? {};
+
+function parseIntEnv(name: string, fallback: number): number {
+  const value = Number(EXT_ENV?.[name]);
+  return Number.isFinite(value) ? Math.floor(value) : fallback;
+}
+
+function parseWindowEnv(name: string, fallback: number[]): number[] {
+  const raw = String(EXT_ENV?.[name] ?? "").trim();
+  if (!raw) return fallback;
+  const values = [...new Set(
+    raw
+      .split(/[,\s]+/)
+      .map((entry) => Number(entry))
+      .filter((entry) => Number.isInteger(entry) && entry >= 2)
+      .map((entry) => Math.floor(entry)),
+  )];
+  return values.length > 0 ? values : fallback;
+}
+
+const KRC721_CHART_WINDOWS = parseWindowEnv("VITE_KRC721_CHART_WINDOWS", [120, 360, 720]);
+const KRC721_CHART_DEFAULT_WINDOW = (() => {
+  const configured = parseIntEnv("VITE_KRC721_CHART_DEFAULT_WINDOW", KRC721_CHART_WINDOWS[0]);
+  const sorted = [...KRC721_CHART_WINDOWS].sort((a, b) => a - b);
+  for (const windowSize of sorted) {
+    if (windowSize >= configured) return windowSize;
+  }
+  return sorted[sorted.length - 1];
+})();
+const KRC721_CHART_RENDER_MAX_POINTS = Math.min(
+  1_200,
+  Math.max(40, parseIntEnv("VITE_KRC721_CHART_RENDER_MAX_POINTS", 220)),
+);
 
 type PricePoint = { ts: number; price: number };
 
@@ -120,6 +154,7 @@ export function WalletTab({
   const [krcPortfolioError, setKrcPortfolioError] = useState<string | null>(null);
   const [selectedKrcToken, setSelectedKrcToken] = useState<KrcPortfolioToken | null>(null);
   const [krc721ChartMode, setKrc721ChartMode] = useState<"floor" | "volume">("floor");
+  const [krc721ChartWindow, setKrc721ChartWindow] = useState<number>(KRC721_CHART_DEFAULT_WINDOW);
 
   // Open send/receive panel when triggered from parent (hero buttons)
   useEffect(() => {
@@ -464,12 +499,14 @@ export function WalletTab({
     setSelectedTokenId(null);
     setSelectedKrcToken(token);
     setKrc721ChartMode("floor");
+    setKrc721ChartWindow(KRC721_CHART_DEFAULT_WINDOW);
   };
 
   const closeTokenDetails = () => {
     setSelectedTokenId(null);
     setSelectedKrcToken(null);
     setKrc721ChartMode("floor");
+    setKrc721ChartWindow(KRC721_CHART_DEFAULT_WINDOW);
   };
 
   const resolveMetadataToken = async () => {
@@ -569,7 +606,7 @@ export function WalletTab({
   const selectedPortfolioSessionChangePct = selectedPortfolioToken?.market?.change24hPct
     ?? selectedPortfolioToken?.chain?.floorChange24hPct
     ?? null;
-  const selectedPortfolioChartPoints = selectedPortfolioToken
+  const selectedPortfolioRawChartPoints = selectedPortfolioToken
     ? selectedPortfolioToken.candles.map((point) => ({
       ts: point.ts,
       price: selectedPortfolioToken.standard === "krc721" && krc721ChartMode === "volume"
@@ -577,6 +614,13 @@ export function WalletTab({
         : point.valueUsd,
     }))
     : [];
+  const selectedPortfolioWindowedChartPoints = selectedPortfolioToken?.standard === "krc721"
+    ? selectedPortfolioRawChartPoints.slice(-Math.max(2, krc721ChartWindow))
+    : selectedPortfolioRawChartPoints;
+  const selectedPortfolioChartPoints = downsampleChartPoints(
+    selectedPortfolioWindowedChartPoints,
+    KRC721_CHART_RENDER_MAX_POINTS,
+  );
   const selectedPortfolioChartLabel = selectedPortfolioToken?.standard === "krc721"
     ? (krc721ChartMode === "volume" ? "24H VOLUME TREND" : "FLOOR PRICE TREND")
     : "PRICE TREND";
@@ -1080,10 +1124,33 @@ export function WalletTab({
               </>
             )}
             <div style={{ fontSize: 8, color: C.muted }}>
-              {selectedPortfolioToken.candles.length} pts
+              {selectedPortfolioWindowedChartPoints.length} pts
             </div>
           </div>
         </div>
+        {selectedPortfolioToken.standard === "krc721" && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 6 }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {KRC721_CHART_WINDOWS.map((windowSize) => (
+                <button
+                  key={windowSize}
+                  onClick={() => setKrc721ChartWindow(windowSize)}
+                  style={{
+                    ...outlineButton(krc721ChartWindow === windowSize ? C.accent : C.dim, true),
+                    padding: "3px 6px",
+                    fontSize: 8,
+                    color: krc721ChartWindow === windowSize ? C.accent : C.dim,
+                  }}
+                >
+                  {formatKrc721WindowLabel(windowSize)}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 8, color: C.muted }}>
+              render {selectedPortfolioChartPoints.length}
+            </div>
+          </div>
+        )}
         <LiveLineChart points={selectedPortfolioChartPoints} color={C.accent} />
         <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", fontSize: 8, color: C.dim }}>
           <span>LOW {selectedPortfolioChartLow != null ? maskedUsd(selectedPortfolioChartLow, 4) : "—"}</span>
@@ -1492,6 +1559,14 @@ const overlayCard: React.CSSProperties = {
   maxHeight: "calc(100vh - 26px)",
   overflowY: "auto",
 };
+
+function formatKrc721WindowLabel(points: number): string {
+  if (points % 60 === 0) {
+    const hours = points / 60;
+    return `${hours}H`;
+  }
+  return `${points}M`;
+}
 
 function MetricTile({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (

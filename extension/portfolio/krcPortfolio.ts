@@ -13,11 +13,14 @@ const HOLDINGS_TTL_DEFAULT_MS = 10_000;
 const PRICE_TTL_DEFAULT_MS = 1_500;
 const CHAIN_TTL_DEFAULT_MS = 30_000;
 const CANDLES_TTL_DEFAULT_MS = 30_000;
+const KRC_CANDLE_FETCH_LIMIT_DEFAULT = 120;
+const KRC721_CANDLE_FETCH_LIMIT_DEFAULT = 360;
+const KRC_CANDLE_POINT_MAX_DEFAULT = 120;
+const KRC721_CANDLE_POINT_MAX_DEFAULT = 360;
 const PREFETCH_MAX_AGE_MS = 5 * 60_000;
 const PREFETCH_MAX_ENTRIES = 6;
 const PREFETCH_STORAGE_KEY = "forgeos.krc.prefetch.v1";
 const REQUEST_TIMEOUT_MS = 3_500;
-const CANDLE_POINT_MAX = 120;
 const HOT_TOKEN_LIMIT = 24;
 
 const endpointHealth = new Map<
@@ -69,6 +72,30 @@ function chainTtlMs(): number {
 
 function candlesTtlMs(): number {
   return clamp(parseIntEnv("VITE_KRC_CANDLES_TTL_MS", CANDLES_TTL_DEFAULT_MS), 15_000, 60_000);
+}
+
+function candleFetchLimit(standard: KaspaTokenStandard): number {
+  const generic = parseIntEnv("VITE_KRC_CANDLE_FETCH_LIMIT", KRC_CANDLE_FETCH_LIMIT_DEFAULT);
+  if (standard === "krc721") {
+    return clamp(
+      parseIntEnv("VITE_KRC721_CANDLE_FETCH_LIMIT", parseIntEnv("VITE_KRC_CANDLE_FETCH_LIMIT", KRC721_CANDLE_FETCH_LIMIT_DEFAULT)),
+      30,
+      2_400,
+    );
+  }
+  return clamp(generic, 30, 2_400);
+}
+
+function candlePointMax(standard: KaspaTokenStandard): number {
+  const generic = parseIntEnv("VITE_KRC_CANDLE_POINT_MAX", KRC_CANDLE_POINT_MAX_DEFAULT);
+  if (standard === "krc721") {
+    return clamp(
+      parseIntEnv("VITE_KRC721_CANDLE_POINT_MAX", parseIntEnv("VITE_KRC_CANDLE_POINT_MAX", KRC721_CANDLE_POINT_MAX_DEFAULT)),
+      20,
+      2_400,
+    );
+  }
+  return clamp(generic, 20, 2_400);
 }
 
 function networkBucket(network: string): "MAINNET" | "TN10" | "TN11" | "TN12" {
@@ -309,17 +336,18 @@ function chainInfoPaths(address: string, standard: KaspaTokenStandard): string[]
 
 function candlePaths(address: string, standard: KaspaTokenStandard): string[] {
   const encoded = encodeURIComponent(address);
+  const limit = candleFetchLimit(standard);
   if (standard === "krc721") {
     return [
-      `/krc721/collections/${encoded}/candles?interval=1m&limit=120`,
-      `/krc721/candles/${encoded}?interval=1m&limit=120`,
-      `/market/krc721/${encoded}/candles?interval=1m&limit=120`,
+      `/krc721/collections/${encoded}/candles?interval=1m&limit=${limit}`,
+      `/krc721/candles/${encoded}?interval=1m&limit=${limit}`,
+      `/market/krc721/${encoded}/candles?interval=1m&limit=${limit}`,
     ];
   }
   return [
-    `/krc20/tokens/${encoded}/candles?interval=1m&limit=120`,
-    `/krc20/candles/${encoded}?interval=1m&limit=120`,
-    `/market/krc20/${encoded}/candles?interval=1m&limit=120`,
+    `/krc20/tokens/${encoded}/candles?interval=1m&limit=${limit}`,
+    `/krc20/candles/${encoded}?interval=1m&limit=${limit}`,
+    `/market/krc20/${encoded}/candles?interval=1m&limit=${limit}`,
   ];
 }
 
@@ -468,7 +496,7 @@ function parseChainStats(raw: unknown, source: string): KrcChainStatsSnapshot | 
   };
 }
 
-function parseCandles(raw: unknown): KrcCandlePoint[] {
+function parseCandles(raw: unknown, standard: KaspaTokenStandard): KrcCandlePoint[] {
   const out: KrcCandlePoint[] = [];
   const tryPush = (entry: Record<string, unknown>) => {
     const ts = pickNumber(entry, ["ts", "timestamp", "time", "t"]);
@@ -499,7 +527,7 @@ function parseCandles(raw: unknown): KrcCandlePoint[] {
     }
   }
   out.sort((a, b) => a.ts - b.ts);
-  return out.slice(-CANDLE_POINT_MAX);
+  return out.slice(-candlePointMax(standard));
 }
 
 async function fetchHoldingsForStandard(
@@ -567,7 +595,7 @@ async function fetchCandles(
   const endpoints = rankEndpoints(candlesEndpoints(network));
   for (const endpoint of endpoints) {
     const parsed = await fetchFromEndpoint(endpoint, candlePaths(address, standard), (raw) => {
-      const candles = parseCandles(raw);
+      const candles = parseCandles(raw, standard);
       return candles.length > 0 ? candles : null;
     });
     if (parsed && parsed.length > 0) {
@@ -711,4 +739,55 @@ export async function prefetchKrcPortfolioForAddress(address: string, network: s
   if (!normalized) return;
   const entries = await fetchKrcPortfolio(normalized, network);
   await savePrefetchedKrcPortfolio(normalized, network, entries);
+}
+
+export function __clearKrcPortfolioCachesForTests(): void {
+  holdingsCache.clear();
+  marketCache.clear();
+  chainCache.clear();
+  candlesCache.clear();
+  endpointHealth.clear();
+}
+
+export function __getKrcPortfolioConfigForTests(): {
+  holdingsTtlMs: number;
+  priceTtlMs: number;
+  chainTtlMs: number;
+  candlesTtlMs: number;
+  krc20CandleFetchLimit: number;
+  krc721CandleFetchLimit: number;
+  krc20CandlePointMax: number;
+  krc721CandlePointMax: number;
+} {
+  return {
+    holdingsTtlMs: holdingsTtlMs(),
+    priceTtlMs: priceTtlMs(),
+    chainTtlMs: chainTtlMs(),
+    candlesTtlMs: candlesTtlMs(),
+    krc20CandleFetchLimit: candleFetchLimit("krc20"),
+    krc721CandleFetchLimit: candleFetchLimit("krc721"),
+    krc20CandlePointMax: candlePointMax("krc20"),
+    krc721CandlePointMax: candlePointMax("krc721"),
+  };
+}
+
+export function __parseKrcCandlesForTests(raw: unknown, standard: KaspaTokenStandard): KrcCandlePoint[] {
+  return parseCandles(raw, standard);
+}
+
+export async function __fetchKrcMarketForTests(
+  address: string,
+  standard: KaspaTokenStandard,
+  network: string,
+): Promise<KrcMarketSnapshot | null> {
+  return fetchMarket(address, standard, network);
+}
+
+export async function __fetchKrcCandlesForTests(
+  address: string,
+  standard: KaspaTokenStandard,
+  network: string,
+  fallbackPrice: number | null,
+): Promise<KrcCandlePoint[]> {
+  return fetchCandles(address, standard, network, fallbackPrice);
 }
