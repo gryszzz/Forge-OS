@@ -1,4 +1,4 @@
-
+<img width="102" height="102" alt="forge-os-icon3" src="https://github.com/user-attachments/assets/9f71b4cf-49db-48b0-a981-3aac326663c7" />
   <h1>Support FORGE-OS</h1>
   
   <p>Kaspa-Native Quant / AI Control Plane</p>
@@ -22,7 +22,8 @@ Send any amount of KAS to:
 kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85
 ```
 <p align="center">
-<img width="100" height="102" alt="forge-os-icon3" src="https://github.com/user-attachments/assets/ca903178-4270-4924-9b4b-f326130b092f" />
+<img width="100" height="100" alt="kaspa-logo" src="https://github.com/user-attachments/assets/ffd59f44-6bc1-49de-bd00-0307bd718078" />
+
 
 </p>
 
