@@ -1,8 +1,11 @@
 
   <h1>Support FORGE-OS</h1>
+  
   <p>Kaspa-Native Quant / AI Control Plane</p>
 </p>
+
 ---
+
 ## 🚀 Support the Development
 
 FORGE-OS is an open-source **Kaspa-native quant trading control plane** with wallet-native signing, real AI overlay, deterministic quant guardrails, and production-oriented runtime controls.
@@ -10,9 +13,12 @@ FORGE-OS is an open-source **Kaspa-native quant trading control plane** with wal
 If you find this project valuable, consider supporting its continued development!
 
 ---
+
 ## 💚 How to Sponsor
 ### Option 1: Kaspa (Recommended)
+
 Send any amount of KAS to:
+
 ```
 kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85
 ```
