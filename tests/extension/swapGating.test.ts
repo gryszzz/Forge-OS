@@ -1,46 +1,45 @@
 // Phase 6 — Integration tests: Swap Gating (Phase 4)
 // Tests feature-flag gating, request validation, quote short-circuit, slippage enforcement.
 //
-// SWAP_CONFIG.enabled = false by default — most tests verify the disabled/gated state.
-// The vault is not mocked because getSwapGatingStatus() returns early before
-// calling getSession() when the feature flag is off.
+// Route is live by default; signer/session requirements are enforced at quote/execute time.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeEach(() => {
   vi.resetModules();
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 // ── getSwapGatingStatus ───────────────────────────────────────────────────────
 
 describe("getSwapGatingStatus", () => {
-  it("returns disabled while SWAP_CONFIG.enabled = false", async () => {
+  it("returns enabled by default when route source is live", async () => {
+    const { getSwapGatingStatus } = await import("../../extension/swap/swap");
+    const status = getSwapGatingStatus();
+    expect(status.enabled).toBe(true);
+    expect(status.reason).toBeNull();
+  });
+
+  it("returns disabled when route source is blocked", async () => {
+    vi.stubEnv("VITE_SWAP_ROUTE_SOURCE", "blocked");
     const { getSwapGatingStatus } = await import("../../extension/swap/swap");
     const status = getSwapGatingStatus();
     expect(status.enabled).toBe(false);
-    expect(status.reason).toBeTruthy();
-  });
-
-  it("disabled reason mentions Kaspa (user-friendly message)", async () => {
-    const { getSwapGatingStatus } = await import("../../extension/swap/swap");
-    const { reason } = getSwapGatingStatus();
-    expect(reason).toMatch(/kaspa/i);
+    expect(status.reason).toMatch(/disabled/i);
   });
 });
 
 // ── validateSwapRequest ───────────────────────────────────────────────────────
 
 describe("validateSwapRequest", () => {
-  it("returns empty array for a fully valid request (KAS → KAS with same token is invalid, so use known-valid combo)", async () => {
-    // NOTE: with STABLES_ENABLED=false only KAS is enabled. Any pair involving
-    // USDT/USDC will fail. We can only confirm the validation shape here.
+  it("returns empty array for a fully valid kaspa-native request", async () => {
+    vi.stubEnv("VITE_SWAP_DEX_ENDPOINT", "https://dex.example");
     const { validateSwapRequest } = await import("../../extension/swap/swap");
-    // KAS→KAS: "different" error
-    // KAS→USDT: "not available" error for USDT
-    // There's no fully valid pair while stables are disabled; test the error cases.
-    const errs = validateSwapRequest({ tokenIn: "KAS", tokenOut: "KAS", amountIn: 1_000n, slippageBps: 50 });
-    // At minimum the same-token error fires
-    expect(Array.isArray(errs)).toBe(true);
+    const errs = validateSwapRequest({ tokenIn: "KAS", tokenOut: "USDC", amountIn: 1_000n, slippageBps: 50 });
+    expect(errs).toEqual([]);
   });
 
   it("errors when tokenIn === tokenOut", async () => {
@@ -49,16 +48,17 @@ describe("validateSwapRequest", () => {
     expect(errs.some((e) => /different/i.test(e))).toBe(true);
   });
 
-  it("errors when tokenOut is disabled (USDT)", async () => {
+  it("errors when kaspa-native endpoint is not configured", async () => {
     const { validateSwapRequest } = await import("../../extension/swap/swap");
     const errs = validateSwapRequest({ tokenIn: "KAS", tokenOut: "USDT", amountIn: 1_000n, slippageBps: 50 });
-    expect(errs.some((e) => /USDT/i.test(e))).toBe(true);
+    expect(errs.some((e) => /DEX endpoint/i.test(e))).toBe(true);
   });
 
-  it("errors when tokenIn is disabled (USDC)", async () => {
+  it("errors when tokenIn is not KAS for kaspa-native route", async () => {
+    vi.stubEnv("VITE_SWAP_DEX_ENDPOINT", "https://dex.example");
     const { validateSwapRequest } = await import("../../extension/swap/swap");
     const errs = validateSwapRequest({ tokenIn: "USDC", tokenOut: "KAS", amountIn: 1_000n, slippageBps: 50 });
-    expect(errs.some((e) => /USDC/i.test(e))).toBe(true);
+    expect(errs.some((e) => /supports KAS as the input/i.test(e))).toBe(true);
   });
 
   it("errors when amountIn is zero", async () => {
@@ -97,6 +97,7 @@ describe("validateSwapRequest", () => {
 
 describe("getSwapQuote", () => {
   it("returns null immediately when feature is disabled (no network call)", async () => {
+    vi.stubEnv("VITE_SWAP_ENABLED", "false");
     const { getSwapQuote } = await import("../../extension/swap/swap");
     const quote = await getSwapQuote({ tokenIn: "KAS", tokenOut: "USDT", amountIn: 1_000n, slippageBps: 50 });
     expect(quote).toBeNull();

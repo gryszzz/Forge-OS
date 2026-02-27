@@ -1,6 +1,5 @@
-// Swap types — scaffolding for future DEX integration.
-// SWAP_ENABLED = false until a Kaspa DEX exists.
-// All fields present so the UI and validation logic are ready to wire up.
+// Swap types — live-ready configuration surface for extension swap routing.
+// Environment vars can still disable/override route behavior per deployment.
 
 import type { TokenId } from "../tokens/types";
 
@@ -98,8 +97,8 @@ function readRouteSourceEnv(name: string, fallback: SwapRouteSource): SwapRouteS
 }
 
 export const SWAP_CONFIG: SwapConfig = {
-  enabled: readBooleanEnv("VITE_SWAP_ENABLED", false), // fail-closed by default
-  routeSource: readRouteSourceEnv("VITE_SWAP_ROUTE_SOURCE", "blocked"),
+  enabled: readBooleanEnv("VITE_SWAP_ENABLED", true),
+  routeSource: readRouteSourceEnv("VITE_SWAP_ROUTE_SOURCE", "kaspa_native"),
   maxSlippageBps: readNumberEnv("VITE_SWAP_MAX_SLIPPAGE_BPS", 500, 1, 2_000),
   defaultSlippageBps: readNumberEnv("VITE_SWAP_DEFAULT_SLIPPAGE_BPS", 50, 1, 2_000),
   dexEndpoint: String(ENV?.VITE_SWAP_DEX_ENDPOINT ?? "").trim() || null,

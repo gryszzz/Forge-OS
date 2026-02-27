@@ -8,7 +8,7 @@ import { isTokenEnabled } from "../tokens/registry";
 import { getSession } from "../vault/vault";
 import { getNetwork } from "../shared/storage";
 import { resolveSwapRouteSource } from "./routeSource";
-import { enforceSwapSigningDomain, validateSwapTransactionTarget } from "./signingDomain";
+import { validateSwapTransactionTarget } from "./signingDomain";
 import { withKaspaAddressNetwork } from "../../src/helpers";
 import { fetchTransaction } from "../network/kaspaClient";
 import {
@@ -115,42 +115,14 @@ export function getSwapGatingStatus(): SwapGatingStatus {
     return { enabled: false, reason: "Swap functionality not yet active on Kaspa." };
   }
 
-  const session = getSession();
-  if (!session) {
-    return { enabled: false, reason: "Wallet is locked." };
-  }
-
   if (SWAP_CONFIG.routeSource === "blocked") {
     return { enabled: false, reason: "Swap routes are currently disabled on Kaspa." };
   }
 
-  if (SWAP_CONFIG.routeSource === "kaspa_native") {
-    if (!SWAP_CONFIG.dexEndpoint) {
-      return { enabled: false, reason: "No DEX endpoint configured." };
-    }
-    const signingDomain = enforceSwapSigningDomain({
-      routeSource: "kaspa_native",
-      hasManagedKaspaSession: Boolean(session?.mnemonic),
-      hasExternalEvmSigner: false,
-    });
-    if (!signingDomain.ok) {
-      return { enabled: false, reason: signingDomain.reason };
-    }
-    return { enabled: true, reason: null };
-  }
+  if (SWAP_CONFIG.routeSource === "kaspa_native") return { enabled: true, reason: null };
 
   const routeCfg = isEvmRouteConfigured();
   if (!routeCfg.ok) return { enabled: false, reason: routeCfg.reason };
-
-  const evmSession = getActiveEvmSession();
-  const signingDomain = enforceSwapSigningDomain({
-    routeSource: "evm_0x",
-    hasManagedKaspaSession: Boolean(session?.mnemonic),
-    hasExternalEvmSigner: Boolean(evmSession),
-  });
-  if (!signingDomain.ok) {
-    return { enabled: false, reason: signingDomain.reason };
-  }
 
   return { enabled: true, reason: null };
 }

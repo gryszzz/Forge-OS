@@ -8,7 +8,6 @@ import { Dashboard } from "./components/dashboard/Dashboard";
 import { Btn } from "./components/ui";
 import { KASPA_NETWORK_PROFILES } from "./kaspa/network";
 import { ForgeAtmosphere } from "./components/chrome/ForgeAtmosphere";
-import { Header } from "./components/Header";
 import { SignInModal } from "./components/SignInModal";
 import { ForgeOSConnectModal } from "./components/ForgeOSConnectModal";
 import { loadSession, clearSession, type ForgeSession } from "./auth/siwa";
@@ -72,37 +71,6 @@ export default function ForgeOS() {
     clearSession();
     setSiwaSession(null);
     setWallet(null);
-  };
-
-  // Handle reconnect - try to reconnect via extension if user has existing session
-  const handleReconnect = async () => {
-    const session = loadSession();
-    if (!session) {
-      setShowSignIn(true);
-      return;
-    }
-
-    // Try to reconnect via extension
-    try {
-      let newSession: any;
-      if (session.provider === "kasware") {
-        newSession = await WalletAdapter.connectKasware();
-      } else if (session.provider === "kastle") {
-        newSession = await WalletAdapter.connectKastle();
-      } else if (session.provider === "forgeos") {
-        newSession = await WalletAdapter.connectForgeOS();
-      } else {
-        setShowSignIn(true);
-        return;
-      }
-
-      if (newSession?.address) {
-        setWallet({ address: newSession.address, network: session.network, provider: session.provider });
-        setView(agents.length > 0 ? "dashboard" : "create");
-      }
-    } catch {
-      setShowSignIn(true);
-    }
   };
 
   const handleDeploy = (a: any) => {
@@ -196,12 +164,6 @@ export default function ForgeOS() {
     <>
       <ForgeAtmosphere />
       <div className="forge-ui-scale">
-        <Header
-          wallet={siwaSession ? { address: siwaSession.address, network: siwaSession.network, provider: siwaSession.provider } : null}
-          onSignInClick={() => setShowForgeConnect(true)}
-          onReconnect={handleReconnect}
-          onDisconnect={handleDisconnect}
-        />
         <WalletGate onConnect={handleConnect} onSignInClick={() => setShowSignIn(true)} />
         {showForgeConnect && (
           <ForgeOSConnectModal

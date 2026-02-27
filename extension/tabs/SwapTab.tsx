@@ -99,6 +99,12 @@ export function SwapTab() {
     setSettlements(items.slice(0, 4));
   };
 
+  const resetQuoteState = () => {
+    setQuote(null);
+    setError(null);
+    setShowExecuteConsent(false);
+  };
+
   const requestQuote = async () => {
     setError(null);
     const tokenMeta = tokens.find((t) => t.id === tokenIn);
@@ -128,10 +134,10 @@ export function SwapTab() {
     }
   };
 
-  const resolveCustomToken = async () => {
+  const resolveCustomTokenFromAddress = async (addressRaw: string) => {
     setTokenResolveError(null);
     setError(null);
-    const trimmed = tokenAddressInput.trim();
+    const trimmed = String(addressRaw || "").trim();
     if (!trimmed) {
       setTokenResolveError("Paste a token address first.");
       return;
@@ -140,7 +146,9 @@ export function SwapTab() {
     try {
       const network = await getNetwork().catch(() => "mainnet");
       const token = await resolveTokenFromAddress(trimmed, tokenStandard, network);
+      setTokenAddressInput(trimmed);
       setResolvedToken(token);
+      resetQuoteState();
     } catch (err) {
       setResolvedToken(null);
       setTokenResolveError(err instanceof Error ? err.message : String(err));
@@ -149,10 +157,13 @@ export function SwapTab() {
     }
   };
 
+  const resolveCustomToken = async () => resolveCustomTokenFromAddress(tokenAddressInput);
+
   const clearResolvedToken = () => {
     setResolvedToken(null);
     setTokenResolveError(null);
     setTokenAddressCopied(false);
+    resetQuoteState();
   };
 
   const pasteTokenAddress = async () => {
@@ -171,6 +182,32 @@ export function SwapTab() {
         return;
       }
       setTokenAddressInput(trimmed);
+      setResolvedToken(null);
+      setTokenAddressCopied(false);
+      resetQuoteState();
+    } catch (err) {
+      setTokenResolveError(err instanceof Error ? err.message : "Failed to read clipboard.");
+    } finally {
+      setTokenClipboardBusy(false);
+    }
+  };
+
+  const pasteAndResolveTokenAddress = async () => {
+    setTokenResolveError(null);
+    setError(null);
+    if (!navigator?.clipboard?.readText) {
+      setTokenResolveError("Clipboard read is unavailable in this browser.");
+      return;
+    }
+    setTokenClipboardBusy(true);
+    try {
+      const text = await navigator.clipboard.readText();
+      const trimmed = text.trim();
+      if (!trimmed) {
+        setTokenResolveError("Clipboard is empty.");
+        return;
+      }
+      await resolveCustomTokenFromAddress(trimmed);
     } catch (err) {
       setTokenResolveError(err instanceof Error ? err.message : "Failed to read clipboard.");
     } finally {
@@ -222,6 +259,18 @@ export function SwapTab() {
     } finally {
       setExecuteBusy(false);
     }
+  };
+
+  const flipSwapDirection = () => {
+    const enabledInputIds = new Set(tokens.filter((t) => t.enabled).map((t) => t.id));
+    if (!enabledInputIds.has(tokenOut)) {
+      setError(`Cannot flip while ${tokenOut} is disabled for input.`);
+      return;
+    }
+    setTokenIn(tokenOut);
+    setTokenOut(tokenIn);
+    clearResolvedToken();
+    resetQuoteState();
   };
 
   const inputStyle = (disabled: boolean): React.CSSProperties => ({
@@ -332,7 +381,10 @@ export function SwapTab() {
         <div style={{ display: "flex", gap: 8 }}>
           <select
             value={tokenIn}
-            onChange={(e) => setTokenIn(e.target.value as TokenId)}
+            onChange={(e) => {
+              setTokenIn(e.target.value as TokenId);
+              resetQuoteState();
+            }}
             disabled={isDisabled}
             style={{ ...selectStyle(isDisabled), flex: "0 0 100px" }}
           >
@@ -356,7 +408,7 @@ export function SwapTab() {
       <div style={{ textAlign: "center" }}>
         <button
           disabled={isDisabled}
-          onClick={() => { setTokenIn(tokenOut); setTokenOut(tokenIn); }}
+          onClick={flipSwapDirection}
           style={{
             background: "linear-gradient(180deg, rgba(16,25,35,0.7), rgba(8,13,20,0.7))", border: `1px solid ${C.border}`,
             borderRadius: "50%", width: 28, height: 28,
@@ -376,7 +428,10 @@ export function SwapTab() {
         <div style={{ display: "flex", gap: 8 }}>
           <select
             value={tokenOut}
-            onChange={(e) => setTokenOut(e.target.value as TokenId)}
+            onChange={(e) => {
+              setTokenOut(e.target.value as TokenId);
+              resetQuoteState();
+            }}
             disabled={isDisabled}
             style={{ ...selectStyle(isDisabled), flex: "0 0 100px" }}
           >
@@ -425,17 +480,31 @@ export function SwapTab() {
           <div style={{ display: "flex", gap: 6 }}>
             <input
               value={tokenAddressInput}
-              onChange={(e) => setTokenAddressInput(e.target.value)}
+              onChange={(e) => {
+                setTokenAddressInput(e.target.value);
+                if (resolvedToken) {
+                  setResolvedToken(null);
+                  setTokenAddressCopied(false);
+                }
+                resetQuoteState();
+              }}
               placeholder="Paste token address"
               disabled={isDisabled}
               style={{ ...inputStyle(isDisabled), flex: 1, padding: "8px 10px", fontSize: 9 }}
             />
             <button
+              onClick={pasteAndResolveTokenAddress}
+              disabled={isDisabled || tokenClipboardBusy}
+              style={{ ...outlineButton(C.dim), padding: "0 10px", fontSize: 8, whiteSpace: "nowrap" }}
+            >
+              {tokenClipboardBusy ? "..." : "PASTE+RESOLVE"}
+            </button>
+            <button
               onClick={pasteTokenAddress}
               disabled={isDisabled || tokenClipboardBusy}
               style={{ ...outlineButton(C.dim), padding: "0 10px", fontSize: 8 }}
             >
-              {tokenClipboardBusy ? "..." : "PASTE"}
+              PASTE
             </button>
             <button
               onClick={resolveCustomToken}
@@ -615,7 +684,7 @@ export function SwapTab() {
           routeInfo.requiresEvmSigner
             ? "This route requires a dedicated EVM signer (Kaspa signer is isolated)."
             : "Signing domain remains inside Kaspa managed wallet boundaries.",
-          "Use PASTE or manual input for KRC20/KRC721 token address, then RESOLVE for live metadata + token image.",
+          "Use PASTE+RESOLVE (one-click) or manual paste + RESOLVE for KRC20/KRC721 metadata + token image.",
           "Output preview required before any signature.",
           `Max slippage cap: ${SWAP_CONFIG.maxSlippageBps / 100}%.`,
           "No silent token redirection — destination enforced.",

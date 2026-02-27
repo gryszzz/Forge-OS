@@ -1,5 +1,5 @@
 // Phase 6 — Integration tests: Token Registry (Phase 4)
-// Tests DEFAULT_REGISTRY structure, accessor functions, and STABLES_ENABLED flag.
+// Tests DEFAULT_REGISTRY structure, accessor functions, and stable-token availability.
 // Pure functions — no chrome or browser mocks needed.
 
 import { describe, expect, it } from "vitest";
@@ -24,17 +24,17 @@ describe("DEFAULT_REGISTRY", () => {
     expect(kas.disabledReason).toBeNull();
   });
 
-  it("USDT and USDC are disabled while STABLES_ENABLED = false", async () => {
+  it("USDT and USDC are enabled when stable swaps are live", async () => {
     const { DEFAULT_REGISTRY, STABLES_ENABLED } = await import("../../extension/tokens/registry");
-    expect(STABLES_ENABLED).toBe(false);
-    expect(DEFAULT_REGISTRY.tokens.USDT.enabled).toBe(false);
-    expect(DEFAULT_REGISTRY.tokens.USDC.enabled).toBe(false);
+    expect(STABLES_ENABLED).toBe(true);
+    expect(DEFAULT_REGISTRY.tokens.USDT.enabled).toBe(true);
+    expect(DEFAULT_REGISTRY.tokens.USDC.enabled).toBe(true);
   });
 
-  it("disabled tokens carry a non-empty disabledReason", async () => {
+  it("disabled reasons are empty for enabled stables and present for disabled routes", async () => {
     const { DEFAULT_REGISTRY } = await import("../../extension/tokens/registry");
-    expect(DEFAULT_REGISTRY.tokens.USDT.disabledReason).toBeTruthy();
-    expect(DEFAULT_REGISTRY.tokens.USDC.disabledReason).toBeTruthy();
+    expect(DEFAULT_REGISTRY.tokens.USDT.disabledReason).toBeNull();
+    expect(DEFAULT_REGISTRY.tokens.USDC.disabledReason).toBeNull();
     expect(DEFAULT_REGISTRY.tokens.ZRX.disabledReason).toBeTruthy();
   });
 
@@ -57,21 +57,21 @@ describe("getToken", () => {
     expect(kas.name).toBe("Kaspa");
   });
 
-  it("returns USDT token definition (even when disabled)", async () => {
+  it("returns USDT token definition", async () => {
     const { getToken } = await import("../../extension/tokens/registry");
     const usdt = getToken("USDT");
     expect(usdt.id).toBe("USDT");
     expect(usdt.symbol).toBe("USDT");
   });
 
-  it("returns USDC token definition (even when disabled)", async () => {
+  it("returns USDC token definition", async () => {
     const { getToken } = await import("../../extension/tokens/registry");
     const usdc = getToken("USDC");
     expect(usdc.id).toBe("USDC");
     expect(usdc.symbol).toBe("USDC");
   });
 
-  it("returns ZRX token definition (even when disabled)", async () => {
+  it("returns ZRX token definition (disabled route)", async () => {
     const { getToken } = await import("../../extension/tokens/registry");
     const zrx = getToken("ZRX");
     expect(zrx.id).toBe("ZRX");
@@ -87,14 +87,14 @@ describe("isTokenEnabled", () => {
     expect(isTokenEnabled("KAS")).toBe(true);
   });
 
-  it("returns false for USDT (STABLES_ENABLED = false)", async () => {
+  it("returns true for USDT", async () => {
     const { isTokenEnabled } = await import("../../extension/tokens/registry");
-    expect(isTokenEnabled("USDT")).toBe(false);
+    expect(isTokenEnabled("USDT")).toBe(true);
   });
 
-  it("returns false for USDC (STABLES_ENABLED = false)", async () => {
+  it("returns true for USDC", async () => {
     const { isTokenEnabled } = await import("../../extension/tokens/registry");
-    expect(isTokenEnabled("USDC")).toBe(false);
+    expect(isTokenEnabled("USDC")).toBe(true);
   });
 
   it("returns false for ZRX until explicit routing support is enabled", async () => {
@@ -118,11 +118,11 @@ describe("getEnabledTokens", () => {
     expect(ids).toContain("KAS");
   });
 
-  it("excludes USDT, USDC, and ZRX while disabled", async () => {
+  it("includes USDT/USDC and excludes ZRX while 0x route is disabled", async () => {
     const { getEnabledTokens } = await import("../../extension/tokens/registry");
     const ids = getEnabledTokens().map((t) => t.id);
-    expect(ids).not.toContain("USDT");
-    expect(ids).not.toContain("USDC");
+    expect(ids).toContain("USDT");
+    expect(ids).toContain("USDC");
     expect(ids).not.toContain("ZRX");
   });
 });

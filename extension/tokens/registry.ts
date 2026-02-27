@@ -10,7 +10,7 @@
 import type { Token, TokenId, TokenRegistry } from "./types";
 
 // ── Feature flags ─────────────────────────────────────────────────────────────
-export const STABLES_ENABLED = false;
+export const STABLES_ENABLED = true;
 export const ZEROX_ENABLED = false;
 
 // ── Default registry ──────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   getConfiguredSwapRouteInfo,
@@ -19,11 +19,19 @@ import {
   validateZeroExQuotePolicy,
 } from "../../extension/swap/0xAdapter";
 
+beforeEach(() => {
+  vi.resetModules();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("swap route source", () => {
-  it("blocks by default route source policy", () => {
+  it("uses kaspa-native route by default", () => {
     const info = getConfiguredSwapRouteInfo();
-    expect(info.source).toBe("blocked");
-    expect(info.allowed).toBe(false);
+    expect(info.source).toBe("kaspa_native");
+    expect(info.allowed).toBe(true);
   });
 
   it("rejects KAS pair on evm_0x route source", () => {

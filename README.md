@@ -407,7 +407,7 @@ The extension is a separate runtime surface under `extension/*`:
 
 ## Swap + KRC Token Metadata
 
-- Swap routing is fail-closed by default (`VITE_SWAP_ENABLED=false`, `VITE_SWAP_ROUTE_SOURCE=blocked`).
+- Swap routing defaults to live Kaspa-native mode (`VITE_SWAP_ENABLED=true`, `VITE_SWAP_ROUTE_SOURCE=kaspa_native`) and can be overridden to `blocked` for maintenance windows.
 - `kaspa_native` route supports custom token outputs by pasted address (`krc20`/`krc721`).
 - Token metadata resolver is **env-driven** and network-scoped:
   - `VITE_SWAP_KRC_TOKEN_METADATA_ENDPOINTS`

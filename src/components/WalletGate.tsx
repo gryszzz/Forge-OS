@@ -90,6 +90,26 @@ export function WalletGate({ onConnect, onSignInClick }: { onConnect: (session: 
     <div className="forge-shell" style={{ display: "flex", flexDirection: "column", alignItems: "center", minHeight: "100vh", padding: "clamp(8px, 2vw, 12px)", backgroundColor: C.bg }}>
       <ForgeAtmosphere />
 
+      {/* Top brand row (no tab/chrome background) */}
+      <div style={{ width: "100%", maxWidth: 1600, display: "flex", alignItems: "center", padding: "4px clamp(16px, 3vw, 36px) 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <img
+            src="/forge-os-icon3.png"
+            alt="Forge-OS"
+            style={{
+              width: 44,
+              height: 44,
+              objectFit: "contain",
+              filter: "drop-shadow(0 0 8px rgba(57,221,182,0.5))",
+            }}
+          />
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", ...mono }}>
+            <span style={{ color: C.accent }}>FORGE</span>
+            <span style={{ color: C.text }}>-OS</span>
+          </span>
+        </div>
+      </div>
+
       {/* ── FULL-WIDTH CENTERED HERO ── */}
       <div style={{ width: "100%", maxWidth: 1100, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "clamp(28px,5vw,56px) clamp(16px,3vw,32px) clamp(20px,3vw,36px)" }}>
         <div aria-hidden style={{ height: 12 }} />
