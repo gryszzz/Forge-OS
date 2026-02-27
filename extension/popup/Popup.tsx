@@ -662,9 +662,34 @@ export function Popup() {
                 fontSize: 9,
                 letterSpacing: "0.08em",
                 color: hidePortfolioBalances ? C.warn : C.dim,
-                minWidth: 56,
+                minWidth: 86,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 5,
               }}
-            >{hidePortfolioBalances ? "SHOW" : "HIDE"}</button>
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+                style={{ flexShrink: 0 }}
+              >
+                <path
+                  d="M1 6C1 6 2.8 3.4 6 3.4C9.2 3.4 11 6 11 6C11 6 9.2 8.6 6 8.6C2.8 8.6 1 6 1 6Z"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                />
+                <circle cx="6" cy="6" r="1.3" fill="currentColor" />
+                {hidePortfolioBalances && (
+                  <path d="M1.3 1.3L10.7 10.7" stroke="currentColor" strokeWidth="1.2" />
+                )}
+              </svg>
+              {hidePortfolioBalances ? "SHOW" : "HIDE"}
+            </button>
           </div>
 
           {/* Portfolio value (fiat primary) */}
