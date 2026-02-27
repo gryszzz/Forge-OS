@@ -22,7 +22,7 @@ Send any amount of KAS to:
 kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85
 ```
 <p align="center">
-<img width="1024" height="1024" alt="forge-os-icon3" src="https://github.com/user-attachments/assets/ca903178-4270-4924-9b4b-f326130b092f" />
+<img width="100" height="102" alt="forge-os-icon3" src="https://github.com/user-attachments/assets/ca903178-4270-4924-9b4b-f326130b092f" />
 
 </p>
 
