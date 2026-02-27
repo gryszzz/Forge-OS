@@ -656,17 +656,19 @@ export function Popup() {
             >{copied ? "COPIED" : "COPY"}</button>
             <button
               onClick={handleToggleHidePortfolioBalances}
+              aria-label={hidePortfolioBalances ? "Show portfolio balances" : "Hide portfolio balances"}
+              title={hidePortfolioBalances ? "Show portfolio balances" : "Hide portfolio balances"}
               style={{
                 ...outlineButton(hidePortfolioBalances ? C.warn : C.dim, true),
-                padding: "3px 8px",
+                padding: "3px 0",
                 fontSize: 9,
                 letterSpacing: "0.08em",
                 color: hidePortfolioBalances ? C.warn : C.dim,
-                minWidth: 86,
+                minWidth: 34,
+                width: 34,
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 5,
               }}
             >
               <svg
@@ -688,7 +690,6 @@ export function Popup() {
                   <path d="M1.3 1.3L10.7 10.7" stroke="currentColor" strokeWidth="1.2" />
                 )}
               </svg>
-              {hidePortfolioBalances ? "SHOW" : "HIDE"}
             </button>
           </div>
 
