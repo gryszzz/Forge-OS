@@ -22,7 +22,8 @@ Send any amount of KAS to:
 kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85
 ```
 <p align="center">
-  <img src="https://raw.githubusercontent.com/kaspa-org/BRD/main/brd-mobile/assets/logos/kaspa-logo-full.png" alt="Kaspa" width="64" />
+<img width="1024" height="1024" alt="forge-os-icon3" src="https://github.com/user-attachments/assets/ca903178-4270-4924-9b4b-f326130b092f" />
+
 </p>
 
 ### Option 2: GitHub Sponsors
