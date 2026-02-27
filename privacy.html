@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — Forge-OS</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #05070A;
+      --surface: #0B1118;
+      --border:  #1C2A3A;
+      --accent:  #39DDB6;
+      --text:    #D6E8F0;
+      --dim:     #6A8FA8;
+      --danger:  #FF5C6C;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+      font-size: 14px;
+      line-height: 1.75;
+      min-height: 100vh;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(5,7,10,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 clamp(16px, 5vw, 64px);
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo { font-size: 15px; font-weight: 700; letter-spacing: 0.12em; }
+    .logo span:first-child { color: var(--accent); }
+    .logo span:last-child  { color: var(--text); }
+    .nav-back {
+      font-size: 11px;
+      color: var(--dim);
+      letter-spacing: 0.08em;
+      transition: color 0.15s;
+    }
+    .nav-back:hover { color: var(--accent); text-decoration: none; }
+
+    /* ── Layout ── */
+    main {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: clamp(32px, 6vw, 72px) clamp(16px, 5vw, 40px);
+    }
+
+    /* ── Header ── */
+    .page-header {
+      margin-bottom: 48px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .page-header .tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: var(--accent);
+      background: rgba(57,221,182,0.08);
+      border: 1px solid rgba(57,221,182,0.2);
+      border-radius: 4px;
+      padding: 3px 10px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: clamp(22px, 4vw, 32px);
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+      margin-bottom: 10px;
+    }
+    .meta { font-size: 11px; color: var(--dim); letter-spacing: 0.06em; }
+
+    /* ── Sections ── */
+    section { margin-bottom: 40px; }
+
+    h2 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    p { margin-bottom: 12px; color: var(--text); }
+    p:last-child { margin-bottom: 0; }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 12px;
+    }
+    ul li {
+      position: relative;
+      padding-left: 18px;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    ul li::before {
+      content: "›";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Callout boxes ── */
+    .callout {
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 14px;
+    }
+    .callout.ok {
+      background: rgba(57,221,182,0.06);
+      border: 1px solid rgba(57,221,182,0.2);
+    }
+    .callout.warn {
+      background: rgba(255,165,0,0.06);
+      border: 1px solid rgba(255,165,0,0.2);
+    }
+    .callout-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      margin-bottom: 6px;
+    }
+    .callout.ok  .callout-title { color: var(--accent); }
+    .callout.warn .callout-title { color: #FFA500; }
+    .callout p { font-size: 13px; margin-bottom: 0; }
+
+    /* ── Table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    th {
+      text-align: left;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--dim);
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(28,42,58,0.5);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    .yes { color: var(--accent); font-weight: 700; }
+    .no  { color: var(--danger); font-weight: 700; }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .footer-logo { font-size: 13px; font-weight: 700; letter-spacing: 0.1em; }
+    .footer-logo span:first-child { color: var(--accent); }
+    .footer-logo span:last-child  { color: var(--text); }
+    .footer-links { font-size: 11px; color: var(--dim); }
+    .footer-links a { color: var(--dim); margin-left: 16px; }
+    .footer-links a:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="logo"><span>FORGE</span><span>-OS</span></div>
+    <a href="https://forge-os.xyz" class="nav-back">← BACK TO APP</a>
+  </nav>
+
+  <main>
+
+    <div class="page-header">
+      <div class="tag">LEGAL</div>
+      <h1>Privacy Policy</h1>
+      <p class="meta">EFFECTIVE DATE: 2025-01-01 &nbsp;·&nbsp; LAST UPDATED: 2025-06-01</p>
+    </div>
+
+    <!-- TL;DR -->
+    <section>
+      <h2>01 — TL;DR</h2>
+      <div class="callout ok">
+        <div class="callout-title">NON-CUSTODIAL. YOUR KEYS, YOUR DATA.</div>
+        <p>
+          Forge-OS never has access to your private keys or seed phrase. All cryptographic
+          secrets are encrypted on your device and never leave it. We do not run any
+          server that stores your wallet data.
+        </p>
+      </div>
+    </section>
+
+    <!-- Who we are -->
+    <section>
+      <h2>02 — WHO WE ARE</h2>
+      <p>
+        Forge-OS is a non-custodial browser wallet and Web3 interface for the Kaspa
+        blockchain network. The software is provided as a browser extension and as a web
+        application available at <a href="https://forge-os.xyz">forge-os.xyz</a>.
+      </p>
+      <p>
+        For privacy questions, contact us at:
+        <a href="mailto:privacy@forge-os.xyz">privacy@forge-os.xyz</a>
+      </p>
+    </section>
+
+    <!-- What we store -->
+    <section>
+      <h2>03 — WHAT IS STORED AND WHERE</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Location</th>
+            <th>Encrypted</th>
+            <th>Leaves Device</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Seed phrase (mnemonic)</td>
+            <td>Browser extension local storage</td>
+            <td class="yes">YES — AES-256-GCM</td>
+            <td class="no">NEVER</td>
+          </tr>
+          <tr>
+            <td>BIP39 passphrase (if set)</td>
+            <td>Browser extension local storage</td>
+            <td class="yes">YES — AES-256-GCM</td>
+            <td class="no">NEVER</td>
+          </tr>
+          <tr>
+            <td>Derived wallet address</td>
+            <td>Browser extension local storage</td>
+            <td>No (public data)</td>
+            <td>Yes — used for balance queries</td>
+          </tr>
+          <tr>
+            <td>Selected network</td>
+            <td>Browser extension local storage</td>
+            <td>No</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>User preferences (auto-lock, etc.)</td>
+            <td>Browser extension local storage</td>
+            <td>No</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Decrypted session (while unlocked)</td>
+            <td>Browser session storage (RAM-only)</td>
+            <td>N/A — cleared on browser close</td>
+            <td class="no">NEVER</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- What we do NOT collect -->
+    <section>
+      <h2>04 — WHAT WE DO NOT COLLECT</h2>
+      <ul>
+        <li>We do <strong>not</strong> collect your seed phrase, private keys, or passwords.</li>
+        <li>We do <strong>not</strong> operate any server that receives or stores your wallet secrets.</li>
+        <li>We do <strong>not</strong> track your browsing history or activity on other websites.</li>
+        <li>We do <strong>not</strong> use analytics, telemetry, or crash-reporting SDKs that phone home.</li>
+        <li>We do <strong>not</strong> sell, rent, or share any data with third parties for advertising.</li>
+        <li>We do <strong>not</strong> require account registration or an email address.</li>
+      </ul>
+    </section>
+
+    <!-- Encryption model -->
+    <section>
+      <h2>05 — ENCRYPTION &amp; SECURITY MODEL</h2>
+      <p>
+        Your seed phrase is encrypted using <strong>AES-256-GCM</strong> with a key derived
+        from your password via <strong>PBKDF2-SHA-256 (600,000 iterations)</strong> before
+        being written to browser storage. The plaintext mnemonic exists only in memory
+        while the wallet is actively unlocked and is wiped immediately on lock.
+      </p>
+      <p>
+        Key derivation uses a random 256-bit salt generated fresh for every vault write,
+        so no two encrypted vaults are identical even with the same password.
+      </p>
+      <div class="callout warn">
+        <div class="callout-title">YOUR RESPONSIBILITY</div>
+        <p>
+          Because we have no access to your keys, we cannot recover your wallet if you
+          forget your password or lose your seed phrase. Back up your seed phrase in a
+          safe, offline location.
+        </p>
+      </div>
+    </section>
+
+    <!-- Network requests -->
+    <section>
+      <h2>06 — NETWORK REQUESTS</h2>
+      <p>
+        Forge-OS communicates with the following external services to provide wallet
+        functionality. No personally identifiable information is transmitted beyond your
+        public wallet address:
+      </p>
+      <ul>
+        <li>
+          <strong>api.kaspa.org</strong> (and testnet equivalents) — Kaspa public REST API.
+          Used to fetch UTXO sets, account balance, and broadcast signed transactions.
+          Only your public address is sent.
+        </li>
+        <li>
+          Kaspa price data — fetched from public market data APIs. No wallet address is
+          included in these requests.
+        </li>
+      </ul>
+      <p>
+        These third-party APIs have their own privacy policies. Forge-OS does not control
+        how they handle request metadata (e.g. IP address).
+      </p>
+    </section>
+
+    <!-- Extension permissions -->
+    <section>
+      <h2>07 — BROWSER EXTENSION PERMISSIONS</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Permission</th>
+            <th>Why it is needed</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>storage</code></td>
+            <td>Save the encrypted vault and preferences locally on your device.</td>
+          </tr>
+          <tr>
+            <td><code>alarms</code></td>
+            <td>Schedule the auto-lock timer so the wallet locks after inactivity.</td>
+          </tr>
+          <tr>
+            <td><code>clipboardWrite</code></td>
+            <td>Allow copying your wallet address to the clipboard.</td>
+          </tr>
+          <tr>
+            <td><code>tabs</code> / <code>windows</code></td>
+            <td>Open the approval popup when a website requests to connect or sign.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        The extension injects a content script only on <code>forge-os.xyz</code> and
+        <code>forgeos.xyz</code>. It does <strong>not</strong> read page content on any
+        other website.
+      </p>
+    </section>
+
+    <!-- Children -->
+    <section>
+      <h2>08 — CHILDREN'S PRIVACY</h2>
+      <p>
+        Forge-OS is not directed at children under the age of 13. We do not knowingly
+        collect any information from children. If you believe a child has used the software
+        inappropriately, please contact us at
+        <a href="mailto:privacy@forge-os.xyz">privacy@forge-os.xyz</a>.
+      </p>
+    </section>
+
+    <!-- Changes -->
+    <section>
+      <h2>09 — CHANGES TO THIS POLICY</h2>
+      <p>
+        We may update this policy as the software evolves. Material changes will be
+        announced on <a href="https://forge-os.xyz">forge-os.xyz</a>. The "Last Updated"
+        date at the top of this page reflects the most recent revision. Continued use of
+        the software after a policy update constitutes acceptance of the revised terms.
+      </p>
+    </section>
+
+    <!-- Contact -->
+    <section>
+      <h2>10 — CONTACT</h2>
+      <p>
+        Questions or concerns about this policy? Reach us at:<br />
+        <a href="mailto:privacy@forge-os.xyz">privacy@forge-os.xyz</a>
+      </p>
+    </section>
+
+    <footer>
+      <div class="footer-logo"><span>FORGE</span><span>-OS</span></div>
+      <div class="footer-links">
+        <a href="https://forge-os.xyz">App</a>
+        <a href="mailto:privacy@forge-os.xyz">Contact</a>
+      </div>
+    </footer>
+
+  </main>
+
+</body>
+</html>
