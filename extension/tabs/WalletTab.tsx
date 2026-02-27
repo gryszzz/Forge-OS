@@ -64,8 +64,8 @@ const EXPLORERS: Record<string, string> = {
   "testnet-12": "https://explorer-tn12.kaspa.org",
 };
 
-const KAS_CHART_MAX_POINTS = 72;
-const KAS_FEED_POLL_MS = 8_000;
+const KAS_CHART_MAX_POINTS = 900; // ~15m at 1s cadence
+const KAS_FEED_POLL_MS = 1_000;
 
 type PricePoint = { ts: number; price: number };
 
@@ -101,7 +101,7 @@ export function WalletTab({
   const [kasPriceSeries, setKasPriceSeries] = useState<PricePoint[]>([]);
   const [kasFeedUpdatedAt, setKasFeedUpdatedAt] = useState<number | null>(null);
   const [kasFeedError, setKasFeedError] = useState<string | null>(null);
-  const [kasChartWindow, setKasChartWindow] = useState<number>(KAS_CHART_MAX_POINTS);
+  const [kasChartWindow, setKasChartWindow] = useState<number>(300);
   const [kasFeedRefreshNonce, setKasFeedRefreshNonce] = useState(0);
   const [networkDaaScore, setNetworkDaaScore] = useState<string | null>(null);
   const [metadataAddressInput, setMetadataAddressInput] = useState("");
@@ -219,7 +219,6 @@ export function WalletTab({
     setLiveKasPrice(usdPrice);
     setKasPriceSeries((prev) => {
       const now = Date.now();
-      if (prev.length > 0 && Math.abs(prev[prev.length - 1].price - usdPrice) < 1e-8) return prev;
       const next = [...prev, { ts: now, price: usdPrice }];
       return next.slice(-KAS_CHART_MAX_POINTS);
     });
@@ -237,17 +236,19 @@ export function WalletTab({
           fetchDagInfo(network),
         ]);
         if (!alive) return;
+        const now = Date.now();
         if (price > 0) {
           setLiveKasPrice(price);
-          setKasPriceSeries((prev) => {
-            const now = Date.now();
-            if (prev.length > 0 && Math.abs(prev[prev.length - 1].price - price) < 1e-8) return prev;
-            const next = [...prev, { ts: now, price }];
-            return next.slice(-KAS_CHART_MAX_POINTS);
-          });
-          setKasFeedUpdatedAt(Date.now());
-          setKasFeedError(null);
         }
+        setKasPriceSeries((prev) => {
+          const fallbackPrice = prev.length > 0 ? prev[prev.length - 1].price : 0;
+          const plotPrice = price > 0 ? price : fallbackPrice;
+          if (plotPrice <= 0) return prev;
+          const next = [...prev, { ts: now, price: plotPrice }];
+          return next.slice(-KAS_CHART_MAX_POINTS);
+        });
+        setKasFeedUpdatedAt(now);
+        setKasFeedError(price > 0 ? null : "Price endpoint stale — plotting last known value.");
         if (dagInfo?.virtualDaaScore) {
           setNetworkDaaScore(dagInfo.virtualDaaScore);
         }
@@ -725,7 +726,7 @@ export function WalletTab({
             {selectedToken.id === "KAS" ? "REAL-TIME KAS/USD CHART" : "BASE LAYER LIVE CHART"}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {([15, 45, KAS_CHART_MAX_POINTS] as const).map((windowSize) => (
+            {([60, 300, KAS_CHART_MAX_POINTS] as const).map((windowSize) => (
               <button
                 key={windowSize}
                 onClick={() => setKasChartWindow(windowSize)}
@@ -736,7 +737,7 @@ export function WalletTab({
                   color: kasChartWindow === windowSize ? C.accent : C.dim,
                 }}
               >
-                {windowSize === 15 ? "2M" : windowSize === 45 ? "6M" : "10M"}
+                {windowSize === 60 ? "1M" : windowSize === 300 ? "5M" : "15M"}
               </button>
             ))}
             <button
@@ -754,7 +755,7 @@ export function WalletTab({
         </div>
         <div style={{ marginTop: 4, display: "flex", justifyContent: "space-between", fontSize: 8, color: C.muted }}>
           <span>{kasFeedUpdatedAt ? `updated ${new Date(kasFeedUpdatedAt).toLocaleTimeString([], { hour12: false })}` : "awaiting feed"}</span>
-          <span>{displayedKasSeries.length} ticks</span>
+          <span>{displayedKasSeries.length} ticks · 1s cadence</span>
         </div>
         {selectedToken.id !== "KAS" && (
           <div style={{ marginTop: 6, fontSize: 8, color: C.dim, lineHeight: 1.45 }}>
