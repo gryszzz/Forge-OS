@@ -110,8 +110,8 @@ async function setKaswareSendPlan(page: Page, plan: Array<{ txid?: string; error
 async function connectKaswareAndDeploy(page: Page, agentName = "E2E Agent", deployTxId = txid("deploy")) {
   await page.goto("/");
   await setKaswareSendPlan(page, [{ txid: deployTxId }]);
-  await page.getByRole("button", { name: /connect wallet/i }).click();
-  await page.getByRole("button", { name: /^kasware/i }).click();
+  await page.getByTestId("wallet-gate-connect-wallet").click();
+  await page.getByTestId("signin-wallet-option-kasware").click();
   await expect(page.getByRole("button", { name: /new agent/i })).toBeVisible();
   await page.getByRole("button", { name: /new agent/i }).click();
   await expect(page.getByText(/configure agent/i)).toBeVisible();
@@ -156,7 +156,7 @@ test.describe("ForgeOS E2E", () => {
 
   test("wallet gate supports demo mode", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: /enter demo mode/i }).click();
+    await page.getByTestId("wallet-gate-enter-demo-mode").click();
     await expect(page.getByRole("button", { name: /new agent/i })).toBeVisible();
     await expect(page.getByText(/DEMO/i)).toBeVisible();
   });
@@ -221,7 +221,7 @@ test.describe("ForgeOS E2E", () => {
 
   test("network switching resets session and updates URL", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: /enter demo mode/i }).click();
+    await page.getByTestId("wallet-gate-enter-demo-mode").click();
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByTestId("network-select").selectOption({ value: "testnet-10" });
     await page.waitForURL(/network=testnet-10/);

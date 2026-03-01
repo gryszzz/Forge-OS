@@ -320,7 +320,7 @@ export function SignInModal({ onSignIn, onClose }: Props) {
   }
 
   return (
-    <div style={backdrop} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div data-testid="signin-modal" style={backdrop} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <Card
         p={0}
         style={{
@@ -367,6 +367,7 @@ export function SignInModal({ onSignIn, onClose }: Props) {
             </div>
           </div>
           <button
+            data-testid="signin-modal-close"
             onClick={onClose}
             style={{
               background: "none",
@@ -387,7 +388,7 @@ export function SignInModal({ onSignIn, onClose }: Props) {
         <div style={{ padding: "16px 20px 20px" }}>
           {/* ── WALLET LIST ─────────────────────────────────────────────────── */}
           {step === "wallet_list" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div data-testid="signin-wallet-list" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {/* Forge-OS — primary option */}
               <WalletRow
                 key="forgeos"
@@ -431,6 +432,7 @@ export function SignInModal({ onSignIn, onClose }: Props) {
 
               {/* Create new wallet */}
               <button
+                data-testid="signin-create-wallet"
                 onClick={() => setStep("creating")}
                 style={{
                   background: `linear-gradient(145deg, ${C.accent}12 0%, rgba(8,13,20,0.5) 100%)`,
@@ -498,6 +500,7 @@ export function SignInModal({ onSignIn, onClose }: Props) {
               </div>
 
               <textarea
+                data-testid="signin-manual-address-input"
                 value={manualAddress}
                 onChange={(e) => {
                   setManualAddress(e.target.value);
@@ -525,12 +528,14 @@ export function SignInModal({ onSignIn, onClose }: Props) {
 
               <div style={{ display: "flex", gap: 8 }}>
                 <button
+                  data-testid="signin-manual-address-back"
                   onClick={() => { setStep("wallet_list"); setError(null); }}
                   style={ghostBtnStyle}
                 >
                   ← BACK
                 </button>
                 <button
+                  data-testid="signin-manual-address-connect"
                   onClick={startConnectManualAddress}
                   disabled={!isKaspaAddress(manualAddress.trim(), ALLOWED_ADDRESS_PREFIXES)}
                   style={primaryBtnStyle(
@@ -666,12 +671,14 @@ export function SignInModal({ onSignIn, onClose }: Props) {
 
                   <div style={{ display: "flex", gap: 8 }}>
                     <button
+                      data-testid="signin-signature-back"
                       onClick={() => { setStep("wallet_list"); setSigRejected(false); }}
                       style={ghostBtnStyle}
                     >
                       ← BACK
                     </button>
                     <button
+                      data-testid="signin-connect-anyway"
                       onClick={() =>
                         finalize(
                           connectingWallet.address,
@@ -716,6 +723,7 @@ function WalletRow({
 
   return (
     <button
+      data-testid={`signin-wallet-option-${option.id}`}
       onClick={notInstalled ? () => window.open(option.installUrl, "_blank") : onSelect}
       style={{
         background: bg,

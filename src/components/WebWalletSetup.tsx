@@ -26,6 +26,7 @@ export function WebWalletSetup({
         </div>
 
         <button
+          data-testid="wallet-gate-connect-wallet"
           onClick={onSignInClick}
           style={{
             width: "100%",
@@ -55,6 +56,7 @@ export function WebWalletSetup({
 
         <div style={{ marginBottom: 10 }}>
           <button
+            data-testid="wallet-gate-enter-demo-mode"
             onClick={onEnterDemoMode}
             style={{
               width: "100%",
@@ -75,6 +77,7 @@ export function WebWalletSetup({
         </div>
 
         <button
+          data-testid="wallet-gate-open-wallet-creator"
           onClick={onOpenCreator}
           style={{
             width: "100%",
@@ -131,4 +134,3 @@ export function WebWalletSetup({
     </div>
   );
 }
-

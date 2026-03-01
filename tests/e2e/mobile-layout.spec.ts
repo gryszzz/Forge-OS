@@ -68,7 +68,7 @@ test.describe("Mobile layout hardening", () => {
       await page.goto("/");
       await disableMotion(page);
 
-      await page.getByRole("button", { name: /enter demo mode/i }).click();
+      await page.getByTestId("wallet-gate-enter-demo-mode").click();
       await expect(page.getByTestId("overview-portfolio-header")).toBeVisible();
       await assertNoHorizontalOverflow(page, `overview ${vp.name}`);
 

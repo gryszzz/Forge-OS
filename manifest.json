@@ -32,7 +32,7 @@
     ]
   },
   "index.html": {
-    "file": "assets/index-Bl78ZP1X.js",
+    "file": "assets/index-DYWyuVuT.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -64,7 +64,7 @@
     "src": "node_modules/kaspa-wasm/kaspa_wasm_bg.wasm"
   },
   "src/components/dashboard/AgentOverviewPanel.tsx": {
-    "file": "assets/AgentOverviewPanel-COOYzoYl.js",
+    "file": "assets/AgentOverviewPanel-DiXo4PLS.js",
     "name": "AgentOverviewPanel",
     "src": "src/components/dashboard/AgentOverviewPanel.tsx",
     "isDynamicEntry": true,
@@ -77,7 +77,7 @@
     ]
   },
   "src/components/dashboard/AlertsPanel.tsx": {
-    "file": "assets/AlertsPanel-B0pWoN5h.js",
+    "file": "assets/AlertsPanel-DCsqshIN.js",
     "name": "AlertsPanel",
     "src": "src/components/dashboard/AlertsPanel.tsx",
     "isDynamicEntry": true,
@@ -90,7 +90,7 @@
     ]
   },
   "src/components/dashboard/IntelligencePanel.tsx": {
-    "file": "assets/IntelligencePanel-DOcKdbjh.js",
+    "file": "assets/IntelligencePanel-TyTyHi2d.js",
     "name": "IntelligencePanel",
     "src": "src/components/dashboard/IntelligencePanel.tsx",
     "isDynamicEntry": true,
@@ -103,7 +103,7 @@
     ]
   },
   "src/components/dashboard/PerfChart.tsx": {
-    "file": "assets/PerfChart-66QBFmbH.js",
+    "file": "assets/PerfChart-CA5DzLOj.js",
     "name": "PerfChart",
     "src": "src/components/dashboard/PerfChart.tsx",
     "isDynamicEntry": true,
@@ -116,7 +116,7 @@
     ]
   },
   "src/components/dashboard/PnlAttributionPanel.tsx": {
-    "file": "assets/PnlAttributionPanel-B0dvDp1i.js",
+    "file": "assets/PnlAttributionPanel-D1N8LJzB.js",
     "name": "PnlAttributionPanel",
     "src": "src/components/dashboard/PnlAttributionPanel.tsx",
     "isDynamicEntry": true,
@@ -129,7 +129,7 @@
     ]
   },
   "src/components/dashboard/PortfolioPanel.tsx": {
-    "file": "assets/PortfolioPanel-sXBQagGz.js",
+    "file": "assets/PortfolioPanel-C_juEJkg.js",
     "name": "PortfolioPanel",
     "src": "src/components/dashboard/PortfolioPanel.tsx",
     "isDynamicEntry": true,
@@ -142,7 +142,7 @@
     ]
   },
   "src/components/dashboard/QuantAnalyticsPanel.tsx": {
-    "file": "assets/QuantAnalyticsPanel-D23eK0uG.js",
+    "file": "assets/QuantAnalyticsPanel-BDt5yWih.js",
     "name": "QuantAnalyticsPanel",
     "src": "src/components/dashboard/QuantAnalyticsPanel.tsx",
     "isDynamicEntry": true,
