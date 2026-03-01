@@ -71,11 +71,11 @@ const LOCAL_NODE_PROFILES: LocalNodeNetworkProfile[] = ["mainnet", "testnet-10",
 const RPC_POOL_OVERRIDE_PRESETS: KaspaRpcPoolOverridePreset[] = ["official", "igra", "kasplex"];
 
 const LOCAL_NODE_REASON_LABELS: Record<string, string> = {
-  local_node_enabled_and_healthy: "Local node selected",
-  local_node_disabled: "Local mode disabled",
-  local_node_unhealthy: "Local RPC unhealthy",
-  local_node_syncing: "Local node syncing (remote fallback)",
-  local_profile_mismatch: "Profile does not match active network",
+  local_node_enabled_and_healthy: "Local node healthy (local route active)",
+  local_node_disabled: "Local-first mode disabled",
+  local_node_unhealthy: "Local RPC unhealthy (remote fallback active)",
+  local_node_syncing: "Local node still syncing (remote fallback active)",
+  local_profile_mismatch: "Local profile does not match active network",
   local_rpc_missing: "Local RPC endpoint missing",
   local_endpoint_missing: "Local RPC endpoint missing",
 };
@@ -1025,7 +1025,7 @@ export function SecurityTab({
 
         <div style={{ ...insetCard(), marginTop: 8, display: "flex", flexDirection: "column", gap: 7 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ fontSize: 8, color: C.dim, letterSpacing: "0.08em" }}>LOCAL NODE MODE (DEFI)</div>
+            <div style={{ fontSize: 8, color: C.dim, letterSpacing: "0.08em" }}>LOCAL NODE EXECUTION (DEFI)</div>
             <div style={{
               fontSize: 7,
               color: localNodeStreamConnected ? C.ok : C.warn,
@@ -1034,8 +1034,12 @@ export function SecurityTab({
               padding: "2px 5px",
               letterSpacing: "0.06em",
             }}>
-              {localNodeStreamConnected ? "LIVE FEED" : "BACKUP POLL"}
+              {localNodeStreamConnected ? "EVENT STREAM" : "POLL FALLBACK"}
             </div>
+          </div>
+          <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.45 }}>
+            Use your own local <span style={{ ...mono, color: C.text }}>kaspad</span> RPC for primary execution when healthy.
+            If local health, sync, or profile checks fail, routing auto-falls back to remote RPC.
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <div style={{
@@ -1056,7 +1060,7 @@ export function SecurityTab({
               padding: "2px 5px",
               letterSpacing: "0.06em",
             }}>
-              TRADE RPC {localNodeStatus?.rpcHealthy ? "LIVE" : "CHECKING"}
+              LOCAL RPC {localNodeStatus?.rpcHealthy ? "HEALTHY" : "DEGRADED"}
             </div>
             <div style={{
               fontSize: 7,
@@ -1138,7 +1142,7 @@ export function SecurityTab({
                 opacity: localNodeBusy ? 0.7 : 1,
               }}
             >
-              {localNodeEnabled ? "LOCAL-FIRST ON" : "LOCAL-FIRST OFF"}
+              {localNodeEnabled ? "LOCAL-FIRST ROUTING ON" : "LOCAL-FIRST ROUTING OFF"}
             </button>
             <button
               onClick={() => { void applyLocalNodeProfile(activeNetworkProfile); }}
@@ -1174,7 +1178,8 @@ export function SecurityTab({
           </div>
           {!localProfileMatchesActive && (
             <div style={{ fontSize: 8, color: C.warn, lineHeight: 1.45 }}>
-              Profile mismatch: local {profileLabel(localNodeProfile)} vs active {profileLabel(activeNetworkProfile)}. Remote RPC fallback stays active until they match.
+              Profile mismatch: local {profileLabel(localNodeProfile)} vs active {profileLabel(activeNetworkProfile)}.
+              Remote fallback remains active until profiles match.
             </div>
           )}
           <input
@@ -1293,7 +1298,7 @@ export function SecurityTab({
             </button>
           </div>
           <div style={{ fontSize: 8, color: localNodeStatus?.rpcHealthy ? C.ok : C.dim, lineHeight: 1.45 }}>
-            Engine: {localNodeStatus?.running ? "running" : "stopped"} · RPC: {localNodeStatus?.rpcHealthy ? "live" : "fallback"} · Sync:{" "}
+            Engine: {localNodeStatus?.running ? "running" : "stopped"} · Route: {(localNodeBackend?.source || "remote")} · Local RPC: {localNodeStatus?.rpcHealthy ? "healthy" : "degraded"} · Sync:{" "}
             {localSyncProgressPct != null ? `${fmt(localSyncProgressPct, 2)}%` : "—"} · Updated {relativeSeconds(localNodeLastUpdatedAt)}
           </div>
           <div style={{ ...insetCard(), height: 8, padding: 0, overflow: "hidden" }}>
@@ -1355,7 +1360,7 @@ export function SecurityTab({
           )}
         </div>
         <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.5, marginTop: 6 }}>
-          Presets are saved per network. Local-first mode uses your control service (`VITE_LOCAL_NODE_CONTROL_URL`) and auto-falls back to remote RPC when local health is degraded.
+          Presets are saved per network. Local-first mode uses your control service (`VITE_LOCAL_NODE_CONTROL_URL`) and automatically falls back to remote RPC for reliability.
         </div>
       </div>
 
