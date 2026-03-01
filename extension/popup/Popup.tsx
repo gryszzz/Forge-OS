@@ -22,7 +22,7 @@ import {
   restoreSessionFromCache,
   setSessionPersistence,
 } from "../vault/vault";
-import { fetchDagInfo, getKaspaEndpointHealth, NETWORK_BPS } from "../network/kaspaClient";
+import { fetchDagInfo, NETWORK_BPS } from "../network/kaspaClient";
 import { connectKaspaWs, disconnectKaspaWs, subscribeUtxosChanged, subscribeDaaScore } from "../network/kaspaWebSocket";
 import { loadPendingTxs } from "../tx/store";
 import { pollConfirmation } from "../tx/broadcast";
@@ -100,7 +100,6 @@ export function Popup() {
   const transientSessionCleanupTimer = useRef<number | null>(null);
   const [lockedAddress, setLockedAddress] = useState<string | null>(null);
   const [dagScore, setDagScore] = useState<string | null>(null);
-  const [activeRpcEndpoint, setActiveRpcEndpoint] = useState<string | null>(null);
   const [balanceUpdatedAt, setBalanceUpdatedAt] = useState<number | null>(null);
   const [priceUpdatedAt, setPriceUpdatedAt] = useState<number | null>(null);
   const [dagUpdatedAt, setDagUpdatedAt] = useState<number | null>(null);
@@ -291,27 +290,6 @@ export function Popup() {
     return () => clearInterval(interval);
   }, [screen.type, session, autoLockMinutes, persistUnlockSessionEnabled]);
 
-  const syncEndpointHealth = useCallback((targetNetwork: string) => {
-    const snapshots = getKaspaEndpointHealth(targetNetwork) as Array<{
-      base: string;
-      lastOkAt: number;
-      lastFailAt: number;
-      consecutiveFails: number;
-    }>;
-    if (!Array.isArray(snapshots) || snapshots.length === 0) {
-      setActiveRpcEndpoint(null);
-      return;
-    }
-
-    const ranked = [...snapshots].sort((a, b) => {
-      if (a.lastOkAt !== b.lastOkAt) return b.lastOkAt - a.lastOkAt;
-      if (a.consecutiveFails !== b.consecutiveFails) return a.consecutiveFails - b.consecutiveFails;
-      return b.lastFailAt - a.lastFailAt;
-    });
-
-    setActiveRpcEndpoint(ranked[0]?.base ?? null);
-  }, []);
-
   // ── Live DAG score ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (screen.type !== "unlocked") return;
@@ -326,12 +304,11 @@ export function Popup() {
       } else {
         setFeedStatusMessage("Live BlockDAG feed unavailable — retrying…");
       }
-      syncEndpointHealth(network);
     };
     poll();
     const id = setInterval(poll, 20_000); // refresh every 20 s
     return () => clearInterval(id);
-  }, [screen.type, network, syncEndpointHealth]);
+  }, [screen.type, network]);
 
   // ── Balance fetch ────────────────────────────────────────────────────────────
   const fetchBalances = useCallback(async (address: string, targetNetwork: string) => {
@@ -363,9 +340,8 @@ export function Popup() {
         if (degraded) return "Live balance/price feed degraded — retrying…";
         return prev?.startsWith("Live balance/price feed") ? null : prev;
       });
-      syncEndpointHealth(targetNetwork);
     } catch { /* non-fatal */ }
-  }, [syncEndpointHealth]);
+  }, []);
 
   // ── Live balance + price polling ───────────────────────────────────────────
   useEffect(() => {
@@ -412,7 +388,6 @@ export function Popup() {
     setBalance(null);
     setUsdPrice(0);
     setDagScore(null);
-    setActiveRpcEndpoint(null);
     setBalanceUpdatedAt(null);
     setPriceUpdatedAt(null);
     setDagUpdatedAt(null);
@@ -427,7 +402,6 @@ export function Popup() {
     setBalance(null);
     setUsdPrice(0);
     setDagScore(null);
-    setActiveRpcEndpoint(null);
     setBalanceUpdatedAt(null);
     setPriceUpdatedAt(null);
     setDagUpdatedAt(null);
@@ -467,7 +441,6 @@ export function Popup() {
     await saveNetwork(next);
     setBalance(null);
     setDagScore(null);
-    setActiveRpcEndpoint(null);
     setBalanceUpdatedAt(null);
     setPriceUpdatedAt(null);
     setDagUpdatedAt(null);
@@ -691,11 +664,6 @@ export function Popup() {
   const anyFeedLive = balanceLive || priceLive || dagLive;
   const feedLabel = allFeedsLive ? "LIVE FEED" : anyFeedLive ? "PARTIAL FEED" : "FEED OFFLINE";
   const feedColor = allFeedsLive ? C.ok : anyFeedLive ? C.warn : C.danger;
-  const latestFeedAt = Math.max(balanceUpdatedAt ?? 0, priceUpdatedAt ?? 0, dagUpdatedAt ?? 0);
-  const feedUpdatedLabel = latestFeedAt > 0
-    ? new Date(latestFeedAt).toLocaleTimeString([], { hour12: false })
-    : "never";
-  const rpcBackendLabel = activeRpcEndpoint ? "ACTIVE" : "UNAVAILABLE";
 
   // Network badge: mainnet = green (ok), testnets = amber (warn)
   const netColor = isMainnet ? C.ok : C.warn;
@@ -1005,12 +973,6 @@ export function Popup() {
               · {NETWORK_BPS[network] ?? 10} BPS · DAA {(parseInt(dagScore, 10) / 1_000_000).toFixed(1)}M
             </span>
           )}
-          <span style={{ fontSize: 8, color: C.dim, letterSpacing: "0.04em" }}>
-            · RPC {rpcBackendLabel}
-          </span>
-          <span style={{ fontSize: 8, color: C.dim, letterSpacing: "0.04em" }}>
-            · UPDATE {feedUpdatedLabel}
-          </span>
         </div>
         <button
           onClick={() => chrome.tabs.create({ url: "https://forge-os.xyz" })}

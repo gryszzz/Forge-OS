@@ -2,7 +2,7 @@
 // The mnemonic is NEVER passed as a prop; it is read from the in-memory
 // session (unlockVault) only when the user explicitly authenticates here.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { C, mono } from "../../src/tokens";
 import { fmt, shortAddr } from "../../src/helpers";
 import { unlockVault, changePassword, resetWallet } from "../vault/vault";
@@ -53,17 +53,6 @@ import {
   sectionKicker,
   sectionTitle,
 } from "../popup/surfaces";
-import {
-  aggregateExecutionTelemetryEvents,
-  clearExecutionTelemetryEvents,
-  EXECUTION_TELEMETRY_CHANNEL_LIST,
-  EXECUTION_TELEMETRY_STAGE_LIST,
-  listExecutionTelemetryEvents,
-  type ExecutionTelemetryAggregateSummary,
-  type ExecutionTelemetryChannel,
-  type ExecutionTelemetryEvent,
-  type ExecutionTelemetryStage,
-} from "../tx/executionTelemetry";
 
 interface Props {
   address: string | null;
@@ -80,25 +69,6 @@ type Panel = "none" | "reveal" | "change_pw" | "reset";
 
 const LOCAL_NODE_PROFILES: LocalNodeNetworkProfile[] = ["mainnet", "testnet-10", "testnet-11", "testnet-12"];
 const RPC_POOL_OVERRIDE_PRESETS: KaspaRpcPoolOverridePreset[] = ["official", "igra", "kasplex"];
-const TELEMETRY_WINDOW_OPTIONS: Array<{ label: string; ms: number }> = [
-  { label: "1H", ms: 60 * 60 * 1000 },
-  { label: "6H", ms: 6 * 60 * 60 * 1000 },
-  { label: "24H", ms: 24 * 60 * 60 * 1000 },
-];
-
-const TELEMETRY_CHANNEL_LABELS: Record<ExecutionTelemetryChannel, string> = {
-  manual: "MANUAL",
-  swap: "SWAP",
-  agent: "AGENT",
-};
-
-const TELEMETRY_STAGE_LABELS: Record<ExecutionTelemetryStage, string> = {
-  build: "BUILD",
-  validate: "VALIDATE",
-  sign: "SIGN",
-  broadcast: "BROADCAST",
-  reconcile: "RECONCILE",
-};
 
 const LOCAL_NODE_REASON_LABELS: Record<string, string> = {
   local_node_enabled_and_healthy: "Local node selected",
@@ -129,12 +99,6 @@ function relativeSeconds(ts: number | null): string {
   if (deltaMs < 60_000) return `${Math.floor(deltaMs / 1_000)}s ago`;
   if (deltaMs < 3_600_000) return `${Math.floor(deltaMs / 60_000)}m ago`;
   return `${Math.floor(deltaMs / 3_600_000)}h ago`;
-}
-
-function shortTxId(txId: string | null): string {
-  if (!txId) return "—";
-  if (txId.length <= 16) return txId;
-  return `${txId.slice(0, 8)}…${txId.slice(-6)}`;
 }
 
 export function SecurityTab({
@@ -192,15 +156,6 @@ export function SecurityTab({
   const [providerProbeError, setProviderProbeError] = useState<string | null>(null);
   const [providerProbeRows, setProviderProbeRows] = useState<KaspaEndpointHealthSnapshot[]>([]);
   const [providerProbeAt, setProviderProbeAt] = useState<number | null>(null);
-  const [telemetryWindowMs, setTelemetryWindowMs] = useState<number>(6 * 60 * 60 * 1000);
-  const [telemetrySummary, setTelemetrySummary] = useState<ExecutionTelemetryAggregateSummary>(
-    () => aggregateExecutionTelemetryEvents([], { windowMs: 6 * 60 * 60 * 1000 }),
-  );
-  const [telemetryEvents, setTelemetryEvents] = useState<ExecutionTelemetryEvent[]>([]);
-  const [telemetryLoading, setTelemetryLoading] = useState(true);
-  const [telemetryBusy, setTelemetryBusy] = useState(false);
-  const [telemetryError, setTelemetryError] = useState<string | null>(null);
-  const [telemetryUpdatedAt, setTelemetryUpdatedAt] = useState<number | null>(null);
 
   const rpcPresetLabels: Record<KaspaRpcProviderPreset, string> = {
     official: "OFFICIAL",
@@ -246,20 +201,6 @@ export function SecurityTab({
     () => describeKaspaProviderPreset(network, rpcPreset, customRpcInput.trim() || null, rpcPoolOverrides),
     [network, rpcPreset, customRpcInput, rpcPoolOverrides],
   );
-  const telemetrySloTone = !telemetrySummary.sloEligible
-    ? C.dim
-    : telemetrySummary.sloMet
-      ? C.ok
-      : C.danger;
-  const telemetrySloLabel = !telemetrySummary.sloEligible
-    ? "INSUFFICIENT SAMPLES"
-    : telemetrySummary.sloMet
-      ? "SLO MET"
-      : "SLO MISS";
-  const visibleTelemetryEvents = useMemo(
-    () => telemetryEvents.filter((event) => event.ts >= telemetrySummary.fromTs).slice(0, 8),
-    [telemetryEvents, telemetrySummary.fromTs],
-  );
   const editablePoolPreset = (rpcPreset === "official" || rpcPreset === "igra" || rpcPreset === "kasplex")
     ? rpcPreset
     : null;
@@ -300,18 +241,6 @@ export function SecurityTab({
     });
     return statusResponse;
   };
-
-  const refreshTelemetry = useCallback(async () => {
-    try {
-      const events = await listExecutionTelemetryEvents(320);
-      setTelemetryEvents(events);
-      setTelemetrySummary(aggregateExecutionTelemetryEvents(events, { windowMs: telemetryWindowMs }));
-      setTelemetryUpdatedAt(Date.now());
-      setTelemetryError(null);
-    } catch (err) {
-      setTelemetryError(err instanceof Error ? err.message : "Failed to read telemetry stream.");
-    }
-  }, [telemetryWindowMs]);
 
   useEffect(() => {
     let active = true;
@@ -369,36 +298,6 @@ export function SecurityTab({
       active = false;
     };
   }, [network]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setTelemetryLoading(true);
-    refreshTelemetry()
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setTelemetryLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshTelemetry]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      void refreshTelemetry();
-    }, 6_000);
-    return () => clearInterval(timer);
-  }, [refreshTelemetry]);
-
-  useEffect(() => {
-    const onChanged = (changes: Record<string, unknown>, areaName: string) => {
-      if (areaName !== "local") return;
-      if (!("forgeos.execution.audit.v1" in changes)) return;
-      void refreshTelemetry();
-    };
-    chrome.storage.onChanged.addListener(onChanged as any);
-    return () => chrome.storage.onChanged.removeListener(onChanged as any);
-  }, [refreshTelemetry]);
 
   useEffect(() => {
     let cancelled = false;
@@ -923,19 +822,6 @@ export function SecurityTab({
     await startManagedLocalNode();
   };
 
-  const clearTelemetry = async () => {
-    setTelemetryBusy(true);
-    setTelemetryError(null);
-    try {
-      await clearExecutionTelemetryEvents();
-      await refreshTelemetry();
-    } catch (err) {
-      setTelemetryError(err instanceof Error ? err.message : "Failed to clear telemetry stream.");
-    } finally {
-      setTelemetryBusy(false);
-    }
-  };
-
   return (
     <div style={popupTabStack}>
 
@@ -1159,7 +1045,7 @@ export function SecurityTab({
 
         <div style={{ ...insetCard(), marginTop: 8, display: "flex", flexDirection: "column", gap: 7 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ fontSize: 8, color: C.dim, letterSpacing: "0.08em" }}>LOCAL NODE MODE</div>
+            <div style={{ fontSize: 8, color: C.dim, letterSpacing: "0.08em" }}>LOCAL NODE MODE (DEFI)</div>
             <div style={{
               fontSize: 7,
               color: localNodeStreamConnected ? C.ok : C.warn,
@@ -1168,7 +1054,7 @@ export function SecurityTab({
               padding: "2px 5px",
               letterSpacing: "0.06em",
             }}>
-              {localNodeStreamConnected ? "EVENTS LIVE" : "POLL MODE"}
+              {localNodeStreamConnected ? "LIVE FEED" : "BACKUP POLL"}
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1180,7 +1066,7 @@ export function SecurityTab({
               padding: "2px 5px",
               letterSpacing: "0.06em",
             }}>
-              NODE {localNodeStatus?.running ? "RUNNING" : "STOPPED"}
+              LOCAL NODE {localNodeStatus?.running ? "ON" : "OFF"}
             </div>
             <div style={{
               fontSize: 7,
@@ -1190,7 +1076,7 @@ export function SecurityTab({
               padding: "2px 5px",
               letterSpacing: "0.06em",
             }}>
-              RPC {localNodeStatus?.rpcHealthy ? "HEALTHY" : "CHECKING"}
+              TRADE RPC {localNodeStatus?.rpcHealthy ? "LIVE" : "CHECKING"}
             </div>
             <div style={{
               fontSize: 7,
@@ -1212,7 +1098,7 @@ export function SecurityTab({
                 letterSpacing: "0.06em",
               }}
             >
-              STATUS JSON
+              OPEN STATUS
             </button>
             <button
               onClick={() => openLocalNodePath("/metrics")}
@@ -1224,7 +1110,7 @@ export function SecurityTab({
                 letterSpacing: "0.06em",
               }}
             >
-              METRICS
+              OPEN METRICS
             </button>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1239,7 +1125,7 @@ export function SecurityTab({
                 opacity: localNodeBusy ? 0.7 : 1,
               }}
             >
-              PRESET: MANAGED LOCAL
+              DEFI PRESET: LOCAL-FIRST
             </button>
             <button
               onClick={() => { void applyNodePreset("remote_official"); }}
@@ -1252,12 +1138,12 @@ export function SecurityTab({
                 opacity: localNodeBusy ? 0.7 : 1,
               }}
             >
-              PRESET: REMOTE OFFICIAL
+              DEFI PRESET: REMOTE-FIRST
             </button>
           </div>
           {!localNodeStatus && (
             <div style={{ fontSize: 8, color: C.warn, lineHeight: 1.45 }}>
-              Local control service is unreachable. Start it with <span style={{ ...mono, color: C.text }}>npm run local-node:start</span>.
+              Local node helper is offline. Run <span style={{ ...mono, color: C.text }}>npm run local-node:start</span> for self-hosted DeFi execution.
             </div>
           )}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1272,7 +1158,7 @@ export function SecurityTab({
                 opacity: localNodeBusy ? 0.7 : 1,
               }}
             >
-              {localNodeEnabled ? "ENABLED" : "DISABLED"}
+              {localNodeEnabled ? "LOCAL-FIRST ON" : "LOCAL-FIRST OFF"}
             </button>
             <button
               onClick={() => { void applyLocalNodeProfile(activeNetworkProfile); }}
@@ -1308,7 +1194,7 @@ export function SecurityTab({
           </div>
           {!localProfileMatchesActive && (
             <div style={{ fontSize: 8, color: C.warn, lineHeight: 1.45 }}>
-              Local profile ({profileLabel(localNodeProfile)}) differs from active network ({profileLabel(activeNetworkProfile)}). Remote fallback stays active until profiles match.
+              Profile mismatch: local {profileLabel(localNodeProfile)} vs active {profileLabel(activeNetworkProfile)}. Remote RPC fallback stays active until they match.
             </div>
           )}
           <input
@@ -1427,7 +1313,7 @@ export function SecurityTab({
             </button>
           </div>
           <div style={{ fontSize: 8, color: localNodeStatus?.rpcHealthy ? C.ok : C.dim, lineHeight: 1.45 }}>
-            Status: {localNodeStatus?.running ? "running" : "stopped"} · RPC: {localNodeStatus?.rpcHealthy ? "healthy" : "unhealthy"} · Sync:{" "}
+            Engine: {localNodeStatus?.running ? "running" : "stopped"} · RPC: {localNodeStatus?.rpcHealthy ? "live" : "fallback"} · Sync:{" "}
             {localSyncProgressPct != null ? `${fmt(localSyncProgressPct, 2)}%` : "—"} · Updated {relativeSeconds(localNodeLastUpdatedAt)}
           </div>
           <div style={{ ...insetCard(), height: 8, padding: 0, overflow: "hidden" }}>
@@ -1443,13 +1329,13 @@ export function SecurityTab({
             />
           </div>
           <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.45, wordBreak: "break-all" }}>
-            Data mode: {localNodeStatus?.dataDirOverride ? "CUSTOM OVERRIDE" : "MANAGED DEFAULT"} · Root: {localNodeStatus?.dataDirBase || "—"}
+            Storage: {localNodeStatus?.dataDirOverride ? "CUSTOM PATH" : "MANAGED DEFAULT"} · Root: {localNodeStatus?.dataDirBase || "—"}
           </div>
           <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.45, wordBreak: "break-all" }}>
             Profile dir: {localNodeStatus?.dataDir || "—"}
           </div>
           <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.45 }}>
-            Backend: {(localNodeBackend?.source || "remote").toUpperCase()} · {LOCAL_NODE_REASON_LABELS[localNodeBackend?.reason || ""] || (localNodeBackend?.reason || "No status reason")}
+            Active route: {(localNodeBackend?.source || "remote").toUpperCase()} · {LOCAL_NODE_REASON_LABELS[localNodeBackend?.reason || ""] || (localNodeBackend?.reason || "No status reason")}
           </div>
           {localNodeMetrics && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6 }}>
@@ -1489,172 +1375,7 @@ export function SecurityTab({
           )}
         </div>
         <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.5, marginTop: 6 }}>
-          Presets are stored per network. Local mode uses a local control service (`VITE_LOCAL_NODE_CONTROL_URL`) and falls back to the selected remote pool if local RPC is unhealthy.
-        </div>
-      </div>
-
-      <div style={sectionCard("default")}>
-        <div style={{ ...sectionKicker, marginBottom: 8 }}>EXECUTION TELEMETRY</div>
-        <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.5, marginBottom: 8 }}>
-          Unified kernel audit stream across manual send, swaps, and agent dispatch.
-        </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-          {TELEMETRY_WINDOW_OPTIONS.map((option) => {
-            const active = telemetryWindowMs === option.ms;
-            return (
-              <button
-                key={option.ms}
-                onClick={() => setTelemetryWindowMs(option.ms)}
-                style={{
-                  ...outlineButton(active ? C.accent : C.dim, true),
-                  padding: "5px 7px",
-                  fontSize: 8,
-                  color: active ? C.accent : C.dim,
-                }}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6, marginBottom: 8 }}>
-          <div style={{ ...insetCard(), padding: "6px 7px" }}>
-            <div style={{ fontSize: 7, color: C.dim }}>EVENTS</div>
-            <div style={{ fontSize: 10, color: C.text, fontWeight: 700 }}>{telemetrySummary.totalEvents}</div>
-          </div>
-          <div style={{ ...insetCard(), padding: "6px 7px" }}>
-            <div style={{ fontSize: 7, color: C.dim }}>RUNS</div>
-            <div style={{ fontSize: 10, color: C.text, fontWeight: 700 }}>{telemetrySummary.uniqueRuns}</div>
-          </div>
-          <div style={{ ...insetCard(), padding: "6px 7px" }}>
-            <div style={{ fontSize: 7, color: C.dim }}>SUCCESS</div>
-            <div style={{ fontSize: 10, color: C.ok, fontWeight: 700 }}>{fmt(telemetrySummary.overall.successRatePct, 1)}%</div>
-          </div>
-          <div style={{ ...insetCard(), padding: "6px 7px" }}>
-            <div style={{ fontSize: 7, color: C.dim }}>FAILED</div>
-            <div style={{ fontSize: 10, color: C.danger, fontWeight: 700 }}>{telemetrySummary.overall.failed}</div>
-          </div>
-        </div>
-        <div style={{ ...insetCard(), marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.4 }}>
-            SLO target {fmt(telemetrySummary.sloTargetPct, 1)}% · min {telemetrySummary.sloMinSamples} samples
-          </div>
-          <div style={{
-            fontSize: 7,
-            color: telemetrySloTone,
-            border: `1px solid ${telemetrySloTone}45`,
-            borderRadius: 4,
-            padding: "2px 5px",
-            letterSpacing: "0.06em",
-          }}>
-            {telemetrySloLabel}
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
-          <div style={{ ...insetCard(), padding: "7px 8px" }}>
-            <div style={{ fontSize: 7, color: C.dim, marginBottom: 5 }}>CHANNEL COUNTERS</div>
-            {EXECUTION_TELEMETRY_CHANNEL_LIST.map((channel) => {
-              const counter = telemetrySummary.byChannel[channel];
-              return (
-                <div
-                  key={channel}
-                  style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 6, alignItems: "center", marginBottom: 4 }}
-                >
-                  <span style={{ fontSize: 7, color: C.text, letterSpacing: "0.06em" }}>{TELEMETRY_CHANNEL_LABELS[channel]}</span>
-                  <div style={{ fontSize: 7, color: C.dim }}>{counter.ok}/{counter.total} ok</div>
-                  <div style={{ fontSize: 7, color: counter.failed > 0 ? C.warn : C.ok }}>
-                    {fmt(counter.successRatePct, 1)}%
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ ...insetCard(), padding: "7px 8px" }}>
-            <div style={{ fontSize: 7, color: C.dim, marginBottom: 5 }}>STAGE COUNTERS</div>
-            {EXECUTION_TELEMETRY_STAGE_LIST.map((stage) => {
-              const counter = telemetrySummary.byStage[stage];
-              return (
-                <div
-                  key={stage}
-                  style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 6, alignItems: "center", marginBottom: 4 }}
-                >
-                  <span style={{ fontSize: 7, color: C.text, letterSpacing: "0.06em" }}>{TELEMETRY_STAGE_LABELS[stage]}</span>
-                  <div style={{ fontSize: 7, color: C.dim }}>{counter.ok}/{counter.total} ok</div>
-                  <div style={{ fontSize: 7, color: counter.failed > 0 ? C.warn : C.ok }}>
-                    {fmt(counter.successRatePct, 1)}%
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button
-            onClick={() => { void refreshTelemetry(); }}
-            disabled={telemetryBusy}
-            style={{
-              ...outlineButton(C.ok, true),
-              flex: 1,
-              padding: "7px 8px",
-              color: C.ok,
-              opacity: telemetryBusy ? 0.7 : 1,
-            }}
-          >
-            REFRESH
-          </button>
-          <button
-            onClick={() => { void clearTelemetry(); }}
-            disabled={telemetryBusy}
-            style={{
-              ...outlineButton(C.warn, true),
-              flex: 1,
-              padding: "7px 8px",
-              color: C.warn,
-              opacity: telemetryBusy ? 0.7 : 1,
-            }}
-          >
-            CLEAR STREAM
-          </button>
-        </div>
-        {telemetryLoading && (
-          <div style={{ fontSize: 8, color: C.dim, marginTop: 6 }}>Loading telemetry stream…</div>
-        )}
-        {telemetryError && (
-          <div style={{ fontSize: 8, color: C.danger, marginTop: 6 }}>{telemetryError}</div>
-        )}
-        {!telemetryError && telemetryUpdatedAt && (
-          <div style={{ fontSize: 8, color: C.dim, marginTop: 6 }}>
-            Last telemetry sync: {relativeSeconds(telemetryUpdatedAt)}
-          </div>
-        )}
-        <div style={{ ...insetCard(), marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontSize: 7, color: C.dim }}>RECENT EVENTS</div>
-          {visibleTelemetryEvents.length === 0 ? (
-            <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.45 }}>No telemetry events in the selected window.</div>
-          ) : (
-            visibleTelemetryEvents.map((event) => (
-              <div key={event.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 8, color: C.text, lineHeight: 1.35, overflowWrap: "anywhere" }}>
-                    {TELEMETRY_CHANNEL_LABELS[event.channel]} · {TELEMETRY_STAGE_LABELS[event.stage]} · {relativeSeconds(event.ts)}
-                  </div>
-                  <div style={{ fontSize: 7, color: C.dim, lineHeight: 1.35 }}>
-                    Run {event.runId.slice(0, 16)}{event.runId.length > 16 ? "…" : ""} · tx {shortTxId(event.txId)}
-                  </div>
-                </div>
-                <div style={{
-                  fontSize: 7,
-                  color: event.status === "ok" ? C.ok : C.danger,
-                  border: `1px solid ${event.status === "ok" ? `${C.ok}45` : `${C.danger}45`}`,
-                  borderRadius: 4,
-                  padding: "2px 5px",
-                  letterSpacing: "0.06em",
-                }}>
-                  {event.status.toUpperCase()}
-                </div>
-              </div>
-            ))
-          )}
+          Presets are saved per network. Local-first mode uses your control service (`VITE_LOCAL_NODE_CONTROL_URL`) and auto-falls back to remote RPC when local health is degraded.
         </div>
       </div>
 

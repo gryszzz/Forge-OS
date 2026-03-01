@@ -306,7 +306,7 @@ export function SignInModal({ onSignIn, onClose }: Props) {
     alignItems: "center",
     justifyContent: "center",
     zIndex: 500,
-    padding: 20,
+    padding: "clamp(8px, 2vw, 20px)",
   };
 
   // ── WalletCreator sub-flow (no extra backdrop — WalletCreator has its own) ──
@@ -322,12 +322,16 @@ export function SignInModal({ onSignIn, onClose }: Props) {
   return (
     <div data-testid="signin-modal" style={backdrop} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <Card
+        data-testid="signin-modal-card"
         p={0}
         style={{
-          maxWidth: 480,
+          maxWidth: "min(520px, calc(100vw - 16px))",
           width: "100%",
           position: "relative",
-          overflow: "hidden",
+          maxHeight: "calc(100dvh - 16px)",
+          overflowX: "hidden",
+          overflowY: "auto",
+          boxSizing: "border-box",
         }}
       >
         {/* Header bar */}
@@ -385,7 +389,7 @@ export function SignInModal({ onSignIn, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div style={{ padding: "16px 20px 20px" }}>
+        <div style={{ padding: "clamp(12px, 2vw, 16px) clamp(14px, 3vw, 20px) clamp(14px, 2vw, 20px)", boxSizing: "border-box" }}>
           {/* ── WALLET LIST ─────────────────────────────────────────────────── */}
           {step === "wallet_list" && (
             <div data-testid="signin-wallet-list" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -749,7 +753,7 @@ function WalletRow({
         (e.currentTarget as HTMLButtonElement).style.borderColor = borderColor;
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
         {/* Wallet logo — SVG component or fallback emoji */}
         <div style={{ width: 28, height: 28, flexShrink: 0, opacity: notInstalled ? 0.45 : 1 }}>
           {LogoComponent ? <LogoComponent /> : (
@@ -758,13 +762,14 @@ function WalletRow({
             </span>
           )}
         </div>
-        <div>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{
             fontSize: primary ? 11 : 10,
             fontWeight: 700,
             color: notInstalled ? C.dim : C.text,
             ...mono,
             marginBottom: 2,
+            overflowWrap: "anywhere",
           }}>
             {option.label}
             {primary && !notInstalled && (
@@ -786,7 +791,7 @@ function WalletRow({
               </span>
             )}
           </div>
-          <div style={{ fontSize: 8, color: C.muted }}>{option.desc}</div>
+          <div style={{ fontSize: 8, color: C.muted, overflowWrap: "anywhere" }}>{option.desc}</div>
         </div>
       </div>
 

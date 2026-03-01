@@ -132,8 +132,8 @@ export function SwapTab() {
   const [tokenSelectMode, setTokenSelectMode] = useState<"from" | "to" | null>(null);
   const [showSettings, setShowSettings] = useState(true);
   const [customSlippage, setCustomSlippage] = useState("");
-  const [deadlineMinutes, setDeadlineMinutes] = useState("20");
-  const [routeMode, setRouteMode] = useState<"auto" | SwapRouteSource>("auto");
+  const deadlineMinutes = "20";
+  const routeMode: "auto" = "auto";
 
   const isDisabled = !gating.enabled;
   const normalizedTokenSearch = tokenSearch.trim().toLowerCase();
@@ -390,11 +390,6 @@ export function SwapTab() {
   const fromTokenDecimals = fromToken?.decimals ?? 8;
   const toTokenDecimals = resolvedToken?.decimals ?? selectedListedTokenOut?.decimals ?? 8;
   const quoteAmountOutDisplay = quote ? formatUnitsDisplay(quote.amountOut, toTokenDecimals, 6) : "0.00";
-  const routeModeLabel = routeMode === "auto"
-    ? "AUTO"
-    : routeMode === "kaspa_native"
-      ? "KASPA"
-      : "0x EVM";
 
   // Filtered list for picker — shows all tokens by default, filters as user types
   const pickerResults = normalizedTokenSearch
@@ -868,84 +863,6 @@ export function SwapTab() {
               {slippageBps > 150 && (
                 <span style={{ color: C.warn }}> — High slippage. Proceed with caution.</span>
               )}
-            </div>
-
-            {/* Standard swap settings */}
-            <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid rgba(28,42,58,0.7)` }}>
-              <div style={{ fontSize: 9, color: C.dim, letterSpacing: "0.1em", marginBottom: 6, fontWeight: 700 }}>
-                STANDARD SETTINGS
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <div style={{ background: "rgba(22,32,45,0.8)", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 8px" }}>
-                  <div style={{ fontSize: 8, color: C.dim, marginBottom: 4 }}>Deadline (min)</div>
-                  <input
-                    value={deadlineMinutes}
-                    onChange={(e) => {
-                      const next = e.target.value.replace(/[^\d]/g, "");
-                      if (!next) {
-                        setDeadlineMinutes("");
-                        return;
-                      }
-                      const clamped = Math.max(1, Math.min(120, Number(next)));
-                      setDeadlineMinutes(String(clamped));
-                    }}
-                    placeholder="20"
-                    style={{
-                      width: "100%",
-                      background: "none",
-                      border: "none",
-                      outline: "none",
-                      color: C.text,
-                      fontSize: 11,
-                      ...mono,
-                    }}
-                  />
-                </div>
-                <div style={{ background: "rgba(22,32,45,0.8)", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 8px" }}>
-                  <div style={{ fontSize: 8, color: C.dim, marginBottom: 4 }}>Route Source</div>
-                  <div style={{ display: "flex", gap: 4, marginBottom: 7 }}>
-                    {([
-                      { id: "auto", label: "AUTO" },
-                      { id: "kaspa_native", label: "KASPA" },
-                      { id: "evm_0x", label: "0x EVM" },
-                    ] as const).map((opt) => {
-                      const active = routeMode === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          onClick={() => {
-                            setRouteMode(opt.id);
-                            setError(null);
-                            resetQuoteState();
-                          }}
-                          style={{
-                            flex: 1,
-                            padding: "5px 0",
-                            borderRadius: 7,
-                            fontSize: 8,
-                            fontWeight: 700,
-                            background: active ? `${C.accent}20` : "rgba(16,25,35,0.5)",
-                            border: `1px solid ${active ? `${C.accent}45` : C.border}`,
-                            color: active ? C.accent : C.dim,
-                            cursor: "pointer",
-                            ...mono,
-                          }}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div style={{ fontSize: 10, color: C.text, ...mono }}>
-                    {activeRouteInfo.label.toUpperCase()} ({routeModeLabel})
-                  </div>
-                  {!activeRouteInfo.allowed && activeRouteInfo.reason && (
-                    <div style={{ fontSize: 8, color: C.warn, lineHeight: 1.4, marginTop: 4 }}>
-                      {activeRouteInfo.reason}
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
 
             {/* Network info */}

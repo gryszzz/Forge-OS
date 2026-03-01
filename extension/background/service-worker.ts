@@ -121,11 +121,18 @@ async function openExtensionPopup(): Promise<void> {
     "extension/popup/index.html";
   const popupPath = String(popupPathRaw).replace(/^\/+/, "");
   const popupUrl = chrome.runtime.getURL(popupPath);
+  const isPopupTabUrl = (tabUrl: string | undefined) =>
+    typeof tabUrl === "string"
+    && (
+      tabUrl === popupUrl
+      || tabUrl.startsWith(`${popupUrl}#`)
+      || tabUrl.startsWith(`${popupUrl}?`)
+    );
 
   // Reuse an already-open Forge-OS popup window if present.
   const windows = await chrome.windows.getAll({ populate: true });
   const existing = windows.find((win) =>
-    (win.tabs ?? []).some((tab) => typeof tab?.url === "string" && tab.url === popupUrl)
+    (win.tabs ?? []).some((tab) => isPopupTabUrl(tab?.url))
   );
   if (existing?.id) {
     await chrome.windows.update(existing.id, { focused: true });

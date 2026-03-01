@@ -148,10 +148,26 @@ function readBoolEnv(name: string, fallback: boolean): boolean {
   return fallback;
 }
 
+function readIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = ENV?.[name];
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return fallback;
+  const rounded = Math.round(parsed);
+  return Math.min(max, Math.max(min, rounded));
+}
+
 const STRICT_EXTENSION_AUTH_CONNECT = readBoolEnv(
   "VITE_FORGEOS_STRICT_EXTENSION_AUTH_CONNECT",
   true,
 );
+const FORGEOS_CONNECT_TIMEOUT_MS = readIntEnv(
+  "VITE_FORGEOS_CONNECT_TIMEOUT_MS",
+  18_000,
+  3_000,
+  120_000,
+);
+const FORGEOS_CONNECT_TIMEOUT_MESSAGE =
+  "Forge-OS connect timed out. Open the extension popup, unlock your wallet, and approve the site connection.";
 
 export type ForgeOSTransportType = "provider" | "bridge" | "managed" | "none";
 
@@ -227,6 +243,14 @@ function bridgeRequest(
   });
 }
 
+function normalizeForgeOSConnectError(err: unknown): Error {
+  const message = String((err as Error)?.message ?? err ?? "Forge-OS connect failed.");
+  if (message.toLowerCase().includes("timed out")) {
+    return new Error(FORGEOS_CONNECT_TIMEOUT_MESSAGE);
+  }
+  return err instanceof Error ? err : new Error(message);
+}
+
 async function waitForForgeOSBridge(timeoutMs = 2_500): Promise<boolean> {
   if (typeof window === "undefined") return false;
   const deadline = Date.now() + Math.max(250, timeoutMs);
@@ -252,7 +276,11 @@ function createForgeOSBridgeProvider() {
     isForgeOS: true as const,
     version: "1.0.0-bridge",
     async connect(): Promise<{ address: string; network: string } | null> {
-      return bridgeRequest("FORGEOS_CONNECT");
+      try {
+        return await bridgeRequest("FORGEOS_CONNECT", undefined, FORGEOS_CONNECT_TIMEOUT_MS);
+      } catch (err) {
+        throw normalizeForgeOSConnectError(err);
+      }
     },
     async signMessage(message: string): Promise<string> {
       return bridgeRequest("FORGEOS_SIGN", { message });
@@ -392,13 +420,19 @@ export const WalletAdapter = {
     const connectPromise = (async (): Promise<ForgeOSConnectResult> => {
       // Try extension provider first (page-provider.ts injects window.forgeos)
       const provider = await resolveForgeOSTransport(3000, 1500);
+      let providerConnectError: Error | null = null;
       if (provider?.isForgeOS) {
-        const wallet = await provider.connect();
-        if (wallet?.address) {
-          return { address: wallet.address, network: wallet.network, provider: "forgeos" };
+        try {
+          const wallet = await provider.connect();
+          if (wallet?.address) {
+            return { address: wallet.address, network: wallet.network, provider: "forgeos" };
+          }
+        } catch (err) {
+          providerConnectError = normalizeForgeOSConnectError(err);
         }
       }
       if (STRICT_EXTENSION_AUTH_CONNECT) {
+        if (providerConnectError) throw providerConnectError;
         throw new Error(
           "Forge-OS extension-auth connect is required in this environment. Reload Forge-OS extension, refresh forge-os.xyz, and set extension Site access to allow this domain.",
         );
@@ -408,6 +442,7 @@ export const WalletAdapter = {
       if (managed?.address) {
         return { address: managed.address, network: managed.network, provider: "forgeos" };
       }
+      if (providerConnectError) throw providerConnectError;
       throw new Error(
         "No Forge-OS wallet bridge detected on this tab. Reload Forge-OS extension, refresh forge-os.xyz, and set extension Site access to allow this domain.",
       );

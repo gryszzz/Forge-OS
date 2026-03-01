@@ -9,6 +9,8 @@
 
 // Sentinel field prevents collision with other postMessage traffic.
 const S = "__forgeos__" as const;
+const BRIDGE_DEFAULT_TIMEOUT_MS = 120_000;
+const BRIDGE_CONNECT_TIMEOUT_MS = 18_000;
 
 type BridgeMsg = { [key: string]: unknown; __forgeos__: true; type: string; requestId?: string };
 type Pending   = { resolve(v: any): void; reject(e: any): void; timer: ReturnType<typeof setTimeout> };
@@ -42,13 +44,17 @@ window.addEventListener("message", (ev) => {
 
 // ── Request helper ───────────────────────────────────────────────────────────
 
-function bridgeRequest(type: string, extra?: Record<string, unknown>): Promise<any> {
+function bridgeRequest(
+  type: string,
+  extra?: Record<string, unknown>,
+  timeoutMs: number = BRIDGE_DEFAULT_TIMEOUT_MS,
+): Promise<any> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
     const timer = setTimeout(() => {
       pending.delete(requestId);
       reject(new Error("Forge-OS: request timed out"));
-    }, 120_000);
+    }, Math.max(250, timeoutMs));
     pending.set(requestId, { resolve, reject, timer });
     window.postMessage({ [S]: true, type, requestId, ...extra }, "*");
   });
@@ -66,7 +72,7 @@ function createProvider() {
      * real vault session status (including auto-lock) and approval policy.
      */
     async connect(): Promise<{ address: string; network: string } | null> {
-      return bridgeRequest("FORGEOS_CONNECT");
+      return bridgeRequest("FORGEOS_CONNECT", undefined, BRIDGE_CONNECT_TIMEOUT_MS);
     },
 
     /** Sign a message via the extension vault (secure path). */

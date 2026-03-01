@@ -27,12 +27,14 @@ function setWindowKastle(kastle: any) {
 function setWindowForgeOSBridge(opts?: {
   connectResult?: { address: string; network: string } | null;
   signResult?: string | null;
+  stallConnect?: boolean;
 }) {
   const listeners = new Set<(event: any) => void>();
   const connectResult =
     opts?.connectResult ??
     { address: "kaspa:qpv7fcvdlz6th4hqjtm9qkkms2dw0raem963x3hm8glu3kjgj7922vy69hv85", network: "mainnet" };
   const signResult = opts?.signResult ?? "sig_bridge_mock";
+  const stallConnect = opts?.stallConnect === true;
 
   const windowMock: any = {
     kasware: undefined,
@@ -77,6 +79,7 @@ function setWindowForgeOSBridge(opts?: {
     }
 
     if (payload.type === "FORGEOS_CONNECT") {
+      if (stallConnect) return;
       respond({
         __forgeos__: true,
         type: "FORGEOS_CONNECT_RESULT",
@@ -247,6 +250,13 @@ describe('WalletAdapter', () => {
       (args: any[]) => args?.[0]?.__forgeos__ === true && args?.[0]?.type === 'FORGEOS_CONNECT'
     );
     expect(connectCalls.length).toBe(1);
+  });
+
+  it('connectForgeOS fails fast with unlock guidance when bridge connect stalls', async () => {
+    vi.stubEnv('VITE_FORGEOS_CONNECT_TIMEOUT_MS', '300');
+    setWindowForgeOSBridge({ stallConnect: true });
+    const { WalletAdapter } = await import('../../src/wallet/WalletAdapter');
+    await expect(WalletAdapter.connectForgeOS()).rejects.toThrow(/unlock your wallet/i);
   });
 
   it('connectForgeOS enforces strict extension-auth policy when configured', async () => {
