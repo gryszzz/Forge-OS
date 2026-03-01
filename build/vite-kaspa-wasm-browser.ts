@@ -16,9 +16,9 @@ const WASM_BOOTSTRAP_SNIPPET = [
 ].join("\n");
 
 const WASM_BROWSER_BOOTSTRAP_SNIPPET = [
-  "const bytes = globalThis.__forgeosKaspaWasmBytes;",
+  "const bytes = globalThis.__forgeosKaspaWasmBytes || globalThis.__FORGEOS_KASPA_WASM_BYTES__;",
   "if (!(bytes instanceof Uint8Array || bytes instanceof ArrayBuffer)) {",
-  "    throw new Error('KASPA_WASM_BYTES_MISSING: preload kaspa_wasm_bg.wasm before importing kaspa-wasm');",
+    "    throw new Error('KASPA_WASM_BYTES_MISSING: preload kaspa_wasm_bg.wasm before importing kaspa-wasm');",
   "}",
   "",
   "const wasmModule = new WebAssembly.Module(bytes);",
@@ -53,4 +53,3 @@ export function patchKaspaWasmForBrowser(): Plugin {
     },
   };
 }
-

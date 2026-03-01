@@ -6,10 +6,22 @@ declare global {
   // Preloaded bytes consumed by our Vite-patched kaspa-wasm wrapper.
   // eslint-disable-next-line no-var
   var __forgeosKaspaWasmBytes: Uint8Array | ArrayBuffer | undefined;
+  // Back-compat key used by older patched wrappers.
+  // eslint-disable-next-line no-var
+  var __FORGEOS_KASPA_WASM_BYTES__: Uint8Array | ArrayBuffer | undefined;
 }
 
 let kaspaModulePromise: Promise<KaspaModule> | null = null;
 let kaspaWasmBytesPromise: Promise<void> | null = null;
+
+function getPreloadedKaspaWasmBytes(): Uint8Array | ArrayBuffer | undefined {
+  return globalThis.__forgeosKaspaWasmBytes || globalThis.__FORGEOS_KASPA_WASM_BYTES__;
+}
+
+function setPreloadedKaspaWasmBytes(bytes: Uint8Array | ArrayBuffer): void {
+  globalThis.__forgeosKaspaWasmBytes = bytes;
+  globalThis.__FORGEOS_KASPA_WASM_BYTES__ = bytes;
+}
 
 function resolveKaspaNamespace(ns: any): KaspaModule {
   if (ns?.Mnemonic) return ns as KaspaModule;
@@ -20,7 +32,7 @@ function resolveKaspaNamespace(ns: any): KaspaModule {
 }
 
 async function ensureKaspaWasmBytes(): Promise<void> {
-  if (globalThis.__forgeosKaspaWasmBytes) return;
+  if (getPreloadedKaspaWasmBytes()) return;
 
   if (!kaspaWasmBytesPromise) {
     kaspaWasmBytesPromise = (async () => {
@@ -29,7 +41,7 @@ async function ensureKaspaWasmBytes(): Promise<void> {
         throw new Error(`WASM_FETCH_FAILED: ${res.status} ${res.statusText}`);
       }
       const buf = await res.arrayBuffer();
-      globalThis.__forgeosKaspaWasmBytes = new Uint8Array(buf);
+      setPreloadedKaspaWasmBytes(new Uint8Array(buf));
     })().catch((err) => {
       kaspaWasmBytesPromise = null;
       throw err;
@@ -73,4 +85,3 @@ export async function loadKaspaWasm(): Promise<KaspaModule> {
 
   return kaspaModulePromise;
 }
-
