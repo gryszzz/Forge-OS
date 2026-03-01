@@ -102,10 +102,30 @@ window.addEventListener("message", (ev) => {
 
   // Connect via extension vault — background opens popup for approval
   if (msg.type === "FORGEOS_CONNECT") {
+    const requestId = typeof msg.requestId === "string" ? msg.requestId : "";
+    if (!requestId) {
+      window.postMessage({
+        [S]: true,
+        requestId,
+        result: null,
+        error: "Invalid connect request",
+      }, "*");
+      return;
+    }
+
+    // Best-effort explicit popup request before queueing connect approval.
+    chrome.runtime.sendMessage({ type: "FORGEOS_OPEN_POPUP" }).catch(() => {});
     chrome.runtime.sendMessage({
       type: "FORGEOS_OPEN_FOR_CONNECT",
-      requestId: msg.requestId,
-    }).catch(() => {});
+      requestId,
+    }).catch((err: any) => {
+      window.postMessage({
+        [S]: true,
+        requestId,
+        result: null,
+        error: err?.message ?? "Connection failed",
+      }, "*");
+    });
     return;
   }
 

@@ -5,7 +5,8 @@ import { sanitizeAgentsSnapshot } from "../shared/agentSync";
 import { fetchBalance } from "../network/kaspaClient";
 import { loadPendingTxs, updatePendingTx } from "../tx/store";
 import { recoverPendingSwapSettlements } from "../swap/swap";
-import { getConnectedSites } from "../shared/storage";
+import { getConnectedSites, NETWORK_STORAGE_KEY } from "../shared/storage";
+import { UI_PATCH_PORT_NAME, type UiPatch, type UiPatchEnvelope } from "../shared/messages";
 import {
   countOriginRequests,
   dropRequestsForTab,
@@ -69,7 +70,26 @@ const MAX_TOTAL_PENDING_REQUESTS = readIntEnv(
   200,
 );
 const STRICT_PENDING_GLOBAL_ORDER = readBoolEnv("VITE_EXT_PENDING_STRICT_GLOBAL_ORDER", false);
-const ENABLE_POPUP_WINDOW_FALLBACK = readBoolEnv("VITE_EXT_POPUP_WINDOW_FALLBACK", false);
+// Keep popup-window fallback enabled by default so connect/sign prompts still
+// open reliably when chrome.action.openPopup is denied in MV3 contexts.
+const ENABLE_POPUP_WINDOW_FALLBACK = readBoolEnv("VITE_EXT_POPUP_WINDOW_FALLBACK", true);
+
+const uiPatchPorts = new Set<chrome.runtime.Port>();
+
+function broadcastUiPatches(patches: UiPatch[]): void {
+  if (!patches.length || uiPatchPorts.size === 0) return;
+  const payload: UiPatchEnvelope = {
+    type: "FORGEOS_UI_PATCH",
+    patches,
+  };
+  for (const port of uiPatchPorts) {
+    try {
+      port.postMessage(payload);
+    } catch {
+      // Ignore dead/disconnected ports.
+    }
+  }
+}
 
 // Storage keys (address + network only — no phrase)
 const WALLET_META_KEY = "forgeos.wallet.meta.v2";
@@ -424,6 +444,27 @@ chrome.runtime.onStartup.addListener(() => {
   updatePendingBadge().catch(() => {});
   prefetchKrcPortfolioFromMeta().catch(() => {});
   recoverPendingSwapSettlements().catch(() => {});
+});
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== UI_PATCH_PORT_NAME) return;
+  uiPatchPorts.add(port);
+  port.onDisconnect.addListener(() => {
+    uiPatchPorts.delete(port);
+  });
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") return;
+  const nextNetwork = changes?.[NETWORK_STORAGE_KEY]?.newValue;
+  if (typeof nextNetwork !== "string" || !nextNetwork) return;
+  broadcastUiPatches([
+    {
+      type: "network",
+      network: nextNetwork,
+      updatedAt: Date.now(),
+    },
+  ]);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {

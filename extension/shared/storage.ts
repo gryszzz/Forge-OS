@@ -35,6 +35,8 @@ const KEYS = {
   localNodeDataDir: "forgeos.local-node.data-dir.v1",
 } as const;
 
+export const NETWORK_STORAGE_KEY = KEYS.network;
+
 const AUTO_LOCK_MIN = 1;
 const AUTO_LOCK_MAX = 24 * 60; // 24h
 const AUTO_LOCK_NEVER = -1;

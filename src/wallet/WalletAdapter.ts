@@ -289,6 +289,9 @@ function createForgeOSBridgeProvider() {
     version: "1.0.0-bridge",
     async connect(): Promise<{ address: string; network: string } | null> {
       try {
+        if (typeof window !== "undefined") {
+          window.postMessage({ [FORGEOS_BRIDGE_SENTINEL]: true, type: "FORGEOS_OPEN_POPUP" }, "*");
+        }
         return await bridgeRequest("FORGEOS_CONNECT", undefined, FORGEOS_CONNECT_TIMEOUT_MS);
       } catch (err) {
         throw normalizeForgeOSConnectError(err);

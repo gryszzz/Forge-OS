@@ -5,6 +5,7 @@ import { fetchKasBalance, fetchKasUsdPrice } from "../shared/api";
 import {
   getWalletMeta,
   getNetwork,
+  NETWORK_STORAGE_KEY,
   setNetwork as saveNetwork,
   getAutoLockMinutes,
   setAutoLockMinutes as saveAutoLockMinutes,
@@ -14,6 +15,7 @@ import {
   setHidePortfolioBalances,
   setWalletMeta,
 } from "../shared/storage";
+import { UI_PATCH_PORT_NAME, isUiPatchEnvelope } from "../shared/messages";
 import {
   vaultExists,
   lockWallet,
@@ -98,6 +100,7 @@ export function Popup() {
   const [siteSignError, setSiteSignError] = useState<string | null>(null);
   const autoSignedRequestIds = useRef(new Set<string>());
   const transientSessionCleanupTimer = useRef<number | null>(null);
+  const networkRef = useRef("mainnet");
   const [lockedAddress, setLockedAddress] = useState<string | null>(null);
   const [dagScore, setDagScore] = useState<string | null>(null);
   const [balanceUpdatedAt, setBalanceUpdatedAt] = useState<number | null>(null);
@@ -115,6 +118,10 @@ export function Popup() {
   const BALANCE_FEED_STALE_MS = 45_000;
   const PRICE_FEED_STALE_MS = 45_000;
   const DAG_FEED_STALE_MS = 60_000;
+
+  useEffect(() => {
+    networkRef.current = network;
+  }, [network]);
 
   const isAutoSignEligibleRequest = useCallback((request: PendingSignRequest | null) => {
     if (!request) return false;
@@ -343,6 +350,59 @@ export function Popup() {
     } catch { /* non-fatal */ }
   }, []);
 
+  const applyNetworkPatch = useCallback((nextNetwork: string) => {
+    const normalized = String(nextNetwork || "").trim();
+    if (!normalized || networkRef.current === normalized) return;
+    networkRef.current = normalized;
+    setNetwork(normalized);
+    setBalance(null);
+    setDagScore(null);
+    setBalanceUpdatedAt(null);
+    setPriceUpdatedAt(null);
+    setDagUpdatedAt(null);
+    setFeedStatusMessage(null);
+    if (session?.address) {
+      fetchBalances(session.address, normalized);
+    }
+  }, [fetchBalances, session?.address]);
+
+  useEffect(() => {
+    const onChanged = (changes: Record<string, any>, areaName: string) => {
+      if (areaName !== "local") return;
+      const networkChange = changes?.[NETWORK_STORAGE_KEY];
+      if (!networkChange || typeof networkChange.newValue !== "string") return;
+      applyNetworkPatch(networkChange.newValue);
+    };
+    chrome.storage.onChanged.addListener(onChanged as any);
+    return () => chrome.storage.onChanged.removeListener(onChanged as any);
+  }, [applyNetworkPatch]);
+
+  useEffect(() => {
+    let port: chrome.runtime.Port | null = null;
+    try {
+      port = chrome.runtime.connect({ name: UI_PATCH_PORT_NAME });
+    } catch {
+      return;
+    }
+    const onMessage = (payload: unknown) => {
+      if (!isUiPatchEnvelope(payload)) return;
+      for (const patch of payload.patches) {
+        if (patch?.type === "network" && typeof patch.network === "string") {
+          applyNetworkPatch(patch.network);
+        }
+      }
+    };
+    port.onMessage.addListener(onMessage as any);
+    return () => {
+      try {
+        port?.onMessage.removeListener(onMessage as any);
+        port?.disconnect();
+      } catch {
+        // ignore cleanup failures from disconnected ports
+      }
+    };
+  }, [applyNetworkPatch]);
+
   // ── Live balance + price polling ───────────────────────────────────────────
   useEffect(() => {
     if (screen.type !== "unlocked" || !session?.address) return;
@@ -437,19 +497,12 @@ export function Popup() {
   const handleCycleNetwork = async () => {
     const idx = NETWORKS.indexOf(network as typeof NETWORKS[number]);
     const next = NETWORKS[(idx + 1) % NETWORKS.length];
-    setNetwork(next);
+    applyNetworkPatch(next);
     await saveNetwork(next);
-    setBalance(null);
-    setDagScore(null);
-    setBalanceUpdatedAt(null);
-    setPriceUpdatedAt(null);
-    setDagUpdatedAt(null);
-    setFeedStatusMessage(null);
     if (session?.address) {
       try {
         await setWalletMeta({ address: withKaspaAddressNetwork(session.address, next), network: next });
       } catch { /* non-fatal */ }
-      fetchBalances(session.address, next);
     }
   };
 

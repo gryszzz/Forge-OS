@@ -51,13 +51,16 @@ export function LockScreen({
   };
 
   return (
-    <div style={{
+    <div
+      data-testid="lock-screen"
+      style={{
       width: EXTENSION_POPUP_BASE_WIDTH, minHeight: EXTENSION_POPUP_BASE_MIN_HEIGHT, ...popupShellBackground(), display: "flex",
       flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
       padding: "28px 30px 24px", ...mono, position: "relative", overflow: "hidden",
       overflowX: "hidden", overflowY: "auto",
       zoom: EXTENSION_POPUP_UI_SCALE,
-    }}>
+      }}
+    >
       {/* Atmospheric blobs */}
       <div style={{ position: "absolute", top: "-12%", left: "50%", transform: "translateX(-50%)", width: 360, height: 360, borderRadius: "50%", background: `radial-gradient(ellipse, ${C.accent}18 0%, transparent 70%)`, pointerEvents: "none" }} />
       <div style={{ position: "absolute", bottom: "-10%", right: "-32%", width: 260, height: 260, borderRadius: "50%", background: `radial-gradient(ellipse, ${C.accent}0A 0%, transparent 72%)`, pointerEvents: "none" }} />
@@ -116,6 +119,7 @@ export function LockScreen({
             {walletAddress ? "ENTER PASSWORD TO SIGN IN" : "PASSWORD"}
           </div>
           <input
+            data-testid="lock-screen-password-input"
             ref={inputRef}
             type="password"
             value={password}
@@ -139,6 +143,7 @@ export function LockScreen({
         )}
 
         <button
+          data-testid="lock-screen-unlock-button"
           type="submit"
           disabled={!password || loading}
           style={{
@@ -161,6 +166,7 @@ export function LockScreen({
       <div style={{ marginTop: 20, textAlign: "center" }}>
         {!showReset ? (
           <button
+            data-testid="lock-screen-forgot-password"
             onClick={() => setShowReset(true)}
             style={{ background: "none", border: "none", color: C.dim, fontSize: 8, cursor: "pointer", ...mono }}
           >
@@ -179,6 +185,7 @@ export function LockScreen({
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button
+                data-testid="lock-screen-reset-cancel"
                 onClick={() => setShowReset(false)}
                 style={{
                   flex: 1, padding: "7px 0", background: "rgba(33,48,67,0.5)",
@@ -187,6 +194,7 @@ export function LockScreen({
                 }}
               >CANCEL</button>
               <button
+                data-testid="lock-screen-reset-confirm"
                 onClick={onReset}
                 style={{
                   flex: 1, padding: "7px 0", background: C.dLow,

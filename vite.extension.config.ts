@@ -36,7 +36,7 @@ export default defineConfig({
       manifest: () => ({
         manifest_version: 3,
         name: "Forge-OS",
-        version: "1.0.0",
+        version: "1.0.1",
         description: "Non-custodial Kaspa wallet — send, receive, DEX & swaps, AI agents. AES-256-GCM + PBKDF2. BIP44. Mainnet, TN10, TN11 & TN12.",
         action: {
           default_popup: "extension/popup/index.html",

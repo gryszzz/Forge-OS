@@ -1081,7 +1081,7 @@ export function SecurityTab({
 
         <div style={{ ...insetCard(), marginTop: 8, display: "flex", flexDirection: "column", gap: 7 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ fontSize: 8, color: C.dim, letterSpacing: "0.08em" }}>LOCAL NODE EXECUTION (DEFI)</div>
+            <div style={{ fontSize: 8, color: C.dim, letterSpacing: "0.08em" }}>LOCAL NODE MODE</div>
             <div style={{
               fontSize: 7,
               color: localNodeStreamConnected ? C.ok : C.warn,
@@ -1094,8 +1094,8 @@ export function SecurityTab({
             </div>
           </div>
           <div style={{ fontSize: 8, color: C.dim, lineHeight: 1.45 }}>
-            Use your own local <span style={{ ...mono, color: C.text }}>kaspad</span> RPC for primary execution when healthy.
-            If local health, sync, or profile checks fail, routing auto-falls back to remote RPC.
+            Run your own <span style={{ ...mono, color: C.text }}>kaspad</span> for self-custody routing.
+            When local health/sync/profile checks pass, traffic stays local; otherwise the wallet auto-falls back to remote RPC.
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <div style={{
@@ -1154,21 +1154,21 @@ export function SecurityTab({
             </button>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <button
-              onClick={() => { void applyNodePreset("managed_local"); }}
-              disabled={localNodeBusy}
-              style={{
+              <button
+                onClick={() => { void applyNodePreset("managed_local"); }}
+                disabled={localNodeBusy}
+                style={{
                 ...outlineButton(C.accent, true),
                 padding: "6px 8px",
                 fontSize: 8,
                 color: C.accent,
                 opacity: localNodeBusy ? 0.7 : 1,
               }}
-            >
-              DEFI PRESET: LOCAL-FIRST
-            </button>
-            <button
-              onClick={() => { void applyNodePreset("remote_official"); }}
+              >
+              QUICK PRESET: LOCAL-FIRST
+              </button>
+              <button
+                onClick={() => { void applyNodePreset("remote_official"); }}
               disabled={localNodeBusy}
               style={{
                 ...outlineButton(C.dim, true),
@@ -1177,13 +1177,13 @@ export function SecurityTab({
                 color: C.dim,
                 opacity: localNodeBusy ? 0.7 : 1,
               }}
-            >
-              DEFI PRESET: REMOTE-FIRST
-            </button>
+              >
+              QUICK PRESET: REMOTE-FIRST
+              </button>
           </div>
           {!localNodeStatus && (
             <div style={{ fontSize: 8, color: C.warn, lineHeight: 1.45 }}>
-              Local node helper is offline. Run <span style={{ ...mono, color: C.text }}>npm run local-node:start</span> for self-hosted DeFi execution.
+              Local node helper is offline. Run <span style={{ ...mono, color: C.text }}>npm run local-node:start</span> to enable local-first routing.
             </div>
           )}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

@@ -30,7 +30,9 @@ export function ConnectApprovalScreen({ address, network, origin, onApprove, onR
   }
 
   return (
-    <div style={{
+    <div
+      data-testid="connect-approval-screen"
+      style={{
       width: "100%",
       maxWidth: EXTENSION_CONNECT_APPROVAL_BASE_WIDTH,
       height: "100%",
@@ -41,7 +43,8 @@ export function ConnectApprovalScreen({ address, network, origin, onApprove, onR
       ...mono,
       overflow: "hidden",
       zoom: EXTENSION_POPUP_UI_SCALE,
-    }}>
+      }}
+    >
       {/* Header */}
       <div style={{ padding: "12px 14px 10px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8 }}>
         <img src="../icons/icon48.png" alt="Forge-OS" style={{ width: 22, height: 22, objectFit: "contain", filter: "drop-shadow(0 0 6px rgba(57,221,182,0.5))" }} />
@@ -133,6 +136,7 @@ export function ConnectApprovalScreen({ address, network, origin, onApprove, onR
         {/* Remember site toggle */}
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 10, color: C.dim }}>
           <input
+            data-testid="connect-approval-remember-site"
             type="checkbox"
             checked={rememberSite}
             onChange={(e) => setRememberSite(e.target.checked)}
@@ -144,6 +148,7 @@ export function ConnectApprovalScreen({ address, network, origin, onApprove, onR
         {/* Action buttons */}
         <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
           <button
+            data-testid="connect-approval-reject"
             onClick={onReject}
             style={{
               flex: 1,
@@ -162,6 +167,7 @@ export function ConnectApprovalScreen({ address, network, origin, onApprove, onR
             REJECT
           </button>
           <button
+            data-testid="connect-approval-approve"
             onClick={handleApprove}
             style={{
               flex: 2,

@@ -934,8 +934,8 @@ export function WalletTab({
           <span>HIGH {maskedUsd(chartSeriesHigh, 4)}</span>
         </div>
         <div style={{ marginTop: 4, display: "flex", justifyContent: "space-between", fontSize: 8, color: C.muted }}>
-          <span>{kasFeedUpdatedAt ? `updated ${new Date(kasFeedUpdatedAt).toLocaleTimeString([], { hour12: false })}` : "awaiting feed"}</span>
-          <span>{chartSeries.length} ticks · 1s cadence</span>
+          <span>{kasFeedUpdatedAt ? "live stream active" : "connecting to live stream…"}</span>
+          <span>{chartSeries.length} live points</span>
         </div>
         {selectedToken.id !== "KAS" && (
           <div style={{ marginTop: 6, fontSize: 8, color: C.dim, lineHeight: 1.45 }}>

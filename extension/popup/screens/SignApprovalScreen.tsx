@@ -32,7 +32,9 @@ export function SignApprovalScreen({
   const displayOrigin = origin ?? "forge-os.xyz";
 
   return (
-    <div style={{
+    <div
+      data-testid="sign-approval-screen"
+      style={{
       width: "100%",
       maxWidth: EXTENSION_CONNECT_APPROVAL_BASE_WIDTH,
       height: "100%",
@@ -43,7 +45,8 @@ export function SignApprovalScreen({
       ...mono,
       overflow: "hidden",
       zoom: EXTENSION_POPUP_UI_SCALE,
-    }}>
+      }}
+    >
       <div style={{ padding: "12px 14px 10px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8 }}>
         <img src="../icons/icon48.png" alt="Forge-OS" style={{ width: 22, height: 22, objectFit: "contain", filter: "drop-shadow(0 0 6px rgba(57,221,182,0.5))" }} />
         <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.1em" }}>
@@ -132,6 +135,7 @@ export function SignApprovalScreen({
 
       <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}`, display: "flex", gap: 10 }}>
         <button
+          data-testid="sign-approval-reject"
           onClick={onReject}
           disabled={loading}
           style={{
@@ -151,6 +155,7 @@ export function SignApprovalScreen({
           REJECT
         </button>
         <button
+          data-testid="sign-approval-approve"
           onClick={onApprove}
           disabled={loading}
           style={{
